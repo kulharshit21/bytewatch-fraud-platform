@@ -3,13 +3,13 @@ from __future__ import annotations
 import time
 from datetime import UTC, datetime, timedelta
 
-from redis import Redis
-
 from fraud_platform_common.config import RuntimeSettings
 from fraud_platform_contracts import TransactionEvent
 from fraud_platform_feature_engineering import FeatureContext, RecentTransaction
-from fraud_platform_feature_store.base import FeatureStore
 from fraud_platform_observability.metrics import REDIS_OPERATION_LATENCY_SECONDS
+from redis import Redis
+
+from fraud_platform_feature_store.base import FeatureStore
 
 
 class RedisFeatureStore(FeatureStore):
@@ -27,7 +27,9 @@ class RedisFeatureStore(FeatureStore):
                 nx=True,
             )
         )
-        REDIS_OPERATION_LATENCY_SECONDS.labels(operation="claim_event").observe(time.perf_counter() - started)
+        REDIS_OPERATION_LATENCY_SECONDS.labels(operation="claim_event").observe(
+            time.perf_counter() - started
+        )
         return claimed
 
     def get_context(self, event: TransactionEvent) -> FeatureContext:
@@ -37,15 +39,24 @@ class RedisFeatureStore(FeatureStore):
         one_hour_ago_ms = int((event.event_time - timedelta(hours=1)).timestamp() * 1000)
         five_minutes_ago_ms = int((event.event_time - timedelta(minutes=5)).timestamp() * 1000)
 
-        tx_rows = self.client.zrangebyscore(self._tx_key(account_key), min=one_hour_ago_ms, max=ts_ms)
-        spend_rows = self.client.zrangebyscore(self._spend_key(account_key), min=one_hour_ago_ms, max=ts_ms)
-        profile = self.client.hgetall(self._profile_key(account_key))
-        merchant_count = int(self.client.get(self._merchant_count_key(account_key, event.merchant_id)) or 0)
-        failed_auth_count = int(
-            self.client.zcount(self._failed_auth_key(account_key), min=five_minutes_ago_ms, max=ts_ms)
+        spend_rows = self.client.zrangebyscore(
+            self._spend_key(account_key), min=one_hour_ago_ms, max=ts_ms
         )
-        is_known_device = bool(self.client.sismember(self._devices_key(account_key), event.device_id))
-        is_known_merchant = bool(self.client.sismember(self._merchants_key(account_key), event.merchant_id))
+        profile = self.client.hgetall(self._profile_key(account_key))
+        merchant_count = int(
+            self.client.get(self._merchant_count_key(account_key, event.merchant_id)) or 0
+        )
+        failed_auth_count = int(
+            self.client.zcount(
+                self._failed_auth_key(account_key), min=five_minutes_ago_ms, max=ts_ms
+            )
+        )
+        is_known_device = bool(
+            self.client.sismember(self._devices_key(account_key), event.device_id)
+        )
+        is_known_merchant = bool(
+            self.client.sismember(self._merchants_key(account_key), event.merchant_id)
+        )
         high_risk = bool(self.client.sismember("risk:merchants:high:set", event.merchant_id))
         if event.metadata.get("merchant_risk_level") == "high":
             high_risk = True
@@ -66,7 +77,9 @@ class RedisFeatureStore(FeatureStore):
             high_risk_merchant=high_risk,
             first_seen=self._parse_dt(profile.get("first_seen")),
         )
-        REDIS_OPERATION_LATENCY_SECONDS.labels(operation="get_context").observe(time.perf_counter() - started)
+        REDIS_OPERATION_LATENCY_SECONDS.labels(operation="get_context").observe(
+            time.perf_counter() - started
+        )
         return context
 
     def update_state(self, event: TransactionEvent) -> None:
@@ -85,10 +98,15 @@ class RedisFeatureStore(FeatureStore):
         pipe.sadd(self._merchants_key(account_key), event.merchant_id)
         pipe.expire(self._merchants_key(account_key), self.settings.feature_profile_ttl_seconds)
         pipe.incr(self._merchant_count_key(account_key, event.merchant_id))
-        pipe.expire(self._merchant_count_key(account_key, event.merchant_id), self.settings.feature_profile_ttl_seconds)
+        pipe.expire(
+            self._merchant_count_key(account_key, event.merchant_id),
+            self.settings.feature_profile_ttl_seconds,
+        )
         if event.prior_auth_failures > 0:
             pipe.zadd(self._failed_auth_key(account_key), {tx_member: ts_ms})
-            pipe.expire(self._failed_auth_key(account_key), self.settings.feature_profile_ttl_seconds)
+            pipe.expire(
+                self._failed_auth_key(account_key), self.settings.feature_profile_ttl_seconds
+            )
         if event.metadata.get("merchant_risk_level") == "high":
             pipe.sadd("risk:merchants:high:set", event.merchant_id)
         profile_updates = {
@@ -100,7 +118,11 @@ class RedisFeatureStore(FeatureStore):
         pipe.hset(self._profile_key(account_key), mapping=profile_updates)
         pipe.hincrbyfloat(self._profile_key(account_key), "rolling_sum_30d", event.amount)
         pipe.hincrby(self._profile_key(account_key), "rolling_count_30d", 1)
-        pipe.hsetnx(self._profile_key(account_key), "first_seen", event.event_time.astimezone(UTC).isoformat())
+        pipe.hsetnx(
+            self._profile_key(account_key),
+            "first_seen",
+            event.event_time.astimezone(UTC).isoformat(),
+        )
         pipe.expire(self._profile_key(account_key), self.settings.feature_profile_ttl_seconds)
         cutoff_1h_ms = int((event.event_time - timedelta(hours=1)).timestamp() * 1000)
         pipe.zremrangebyscore(self._tx_key(account_key), 0, cutoff_1h_ms)
@@ -108,7 +130,9 @@ class RedisFeatureStore(FeatureStore):
         cutoff_5m_ms = int((event.event_time - timedelta(minutes=5)).timestamp() * 1000)
         pipe.zremrangebyscore(self._failed_auth_key(account_key), 0, cutoff_5m_ms)
         pipe.execute()
-        REDIS_OPERATION_LATENCY_SECONDS.labels(operation="update_state").observe(time.perf_counter() - started)
+        REDIS_OPERATION_LATENCY_SECONDS.labels(operation="update_state").observe(
+            time.perf_counter() - started
+        )
 
     @staticmethod
     def _parse_dt(value: str | None) -> datetime | None:

@@ -2,22 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import random
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Iterable
 from uuid import uuid4
 
 import pandas as pd
 from faker import Faker
-
 from fraud_platform_contracts import (
     Channel,
     PaymentMethod,
     SimulationScenario,
     TransactionEvent,
 )
-
 
 faker = Faker()
 
@@ -80,8 +78,8 @@ class SyntheticPopulation:
         )
         account_id = f"acct_{index:05d}"
         customer_id = f"cust_{index:05d}"
-        email_hash = hashlib.sha256(f"{customer_id}@example.com".encode("utf-8")).hexdigest()[:16]
-        phone_hash = hashlib.sha256(f"+91-90000{index:05d}".encode("utf-8")).hexdigest()[:16]
+        email_hash = hashlib.sha256(f"{customer_id}@example.com".encode()).hexdigest()[:16]
+        phone_hash = hashlib.sha256(f"+91-90000{index:05d}".encode()).hexdigest()[:16]
         devices = [f"device_{index:05d}_{slot}" for slot in range(1, self.random.randint(2, 4))]
         trusted_merchants = self.random.sample(MERCHANTS[:5], k=2)
         return AccountProfile(
@@ -115,7 +113,9 @@ class SyntheticTransactionGenerator:
             SimulationScenario.RISKY_MERCHANT: fraud_ratio * 0.16,
         }
 
-    def generate(self, *, now: datetime | None = None, scenario: SimulationScenario | None = None) -> TransactionEvent:
+    def generate(
+        self, *, now: datetime | None = None, scenario: SimulationScenario | None = None
+    ) -> TransactionEvent:
         account = self.random.choice(self.population.accounts)
         chosen_scenario = scenario or self._pick_scenario()
         event_time = now or self._next_event_time(account)
@@ -129,7 +129,9 @@ class SyntheticTransactionGenerator:
         }
         if event.device_id not in account.known_devices:
             account.known_devices.append(event.device_id)
-        if all(merchant["merchant_id"] != event.merchant_id for merchant in account.trusted_merchants):
+        if all(
+            merchant["merchant_id"] != event.merchant_id for merchant in account.trusted_merchants
+        ):
             account.trusted_merchants.append(
                 {
                     "merchant_id": event.merchant_id,
@@ -151,7 +153,9 @@ class SyntheticTransactionGenerator:
         pd.DataFrame(rows).to_csv(output, index=False)
         return str(output)
 
-    def iter_events(self, count: int, *, start_time: datetime | None = None) -> Iterable[TransactionEvent]:
+    def iter_events(
+        self, count: int, *, start_time: datetime | None = None
+    ) -> Iterable[TransactionEvent]:
         base = start_time or datetime.now(UTC)
         for offset in range(count):
             yield self.generate(now=base + timedelta(seconds=offset * 5))
@@ -176,7 +180,9 @@ class SyntheticTransactionGenerator:
             scenario,
         )
         event_id = uuid4()
-        user_agent_hash = hashlib.sha256(f"{account.account_id}:{device_id}".encode("utf-8")).hexdigest()[:16]
+        user_agent_hash = hashlib.sha256(f"{account.account_id}:{device_id}".encode()).hexdigest()[
+            :16
+        ]
         ip_address = self._ip_for_country(str(city["country"]))
         is_international = city["country"] != account.home_city["country"]
         return TransactionEvent(
@@ -229,15 +235,27 @@ class SyntheticTransactionGenerator:
             merchant = self.random.choice(account.trusted_merchants)
             city = account.home_city
             device = self.random.choice(account.known_devices)
-            amount = max(50.0, self.random.gauss(account.base_amount * 0.75, account.base_amount * 0.15))
+            amount = max(
+                50.0, self.random.gauss(account.base_amount * 0.75, account.base_amount * 0.15)
+            )
             return merchant, city, device, amount, self.random.randint(0, 1), 1, Channel.ECOMMERCE
 
         if scenario == SimulationScenario.IMPOSSIBLE_TRAVEL:
             merchant = self.random.choice(MERCHANTS)
             far_city = self.random.choice(CITY_PROFILES[5:])
             device = f"{account.account_id}_device_travel_{self.sequence}"
-            amount = max(300.0, self.random.gauss(account.base_amount * 1.4, account.base_amount * 0.3))
-            return merchant, far_city, device, amount, self.random.randint(1, 2), 1, Channel.ECOMMERCE
+            amount = max(
+                300.0, self.random.gauss(account.base_amount * 1.4, account.base_amount * 0.3)
+            )
+            return (
+                merchant,
+                far_city,
+                device,
+                amount,
+                self.random.randint(1, 2),
+                1,
+                Channel.ECOMMERCE,
+            )
 
         if scenario == SimulationScenario.CARD_TESTING:
             merchant = self.random.choice(MERCHANTS)
@@ -250,20 +268,26 @@ class SyntheticTransactionGenerator:
             merchant = self.random.choice(MERCHANTS)
             city = self.random.choice(CITY_PROFILES)
             device = f"{account.account_id}_compromised_{self.sequence}"
-            amount = max(400.0, self.random.gauss(account.base_amount * 2.0, account.base_amount * 0.4))
+            amount = max(
+                400.0, self.random.gauss(account.base_amount * 2.0, account.base_amount * 0.4)
+            )
             return merchant, city, device, amount, self.random.randint(3, 6), 1, Channel.TRANSFER
 
         if scenario == SimulationScenario.NEW_DEVICE_HIGH_AMOUNT:
             merchant = self.random.choice(account.trusted_merchants)
             city = account.home_city
             device = f"{account.account_id}_fresh_{self.sequence}"
-            amount = max(1_500.0, self.random.gauss(account.base_amount * 3.2, account.base_amount * 0.5))
+            amount = max(
+                1_500.0, self.random.gauss(account.base_amount * 3.2, account.base_amount * 0.5)
+            )
             return merchant, city, device, amount, self.random.randint(1, 2), 1, Channel.ECOMMERCE
 
         merchant = self.random.choice([item for item in MERCHANTS if item["risk_level"] == "high"])
         city = self.random.choice(CITY_PROFILES[5:])
         device = f"{account.account_id}_risk_{self.sequence}"
-        amount = max(600.0, self.random.gauss(account.base_amount * 1.6, account.base_amount * 0.35))
+        amount = max(
+            600.0, self.random.gauss(account.base_amount * 1.6, account.base_amount * 0.35)
+        )
         return merchant, city, device, amount, self.random.randint(1, 3), 1, Channel.WALLET
 
     def _channel_for_account(self, account: AccountProfile) -> Channel:
@@ -280,4 +304,8 @@ class SyntheticTransactionGenerator:
             "AE": "94",
         }
         prefix = octets.get(country_code, "203")
-        return f"{prefix}.{self.random.randint(0, 255)}.{self.random.randint(0, 255)}.{self.random.randint(1, 254)}"
+        return (
+            f"{prefix}.{self.random.randint(0, 255)}."
+            f"{self.random.randint(0, 255)}."
+            f"{self.random.randint(1, 254)}"
+        )

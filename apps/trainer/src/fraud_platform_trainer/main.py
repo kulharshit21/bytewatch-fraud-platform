@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-
 from fraud_platform_common.config import RuntimeSettings
 from fraud_platform_common.service import create_service_app, dependency_from_url
+
 from fraud_platform_trainer.training import FraudTrainer
 
 
@@ -69,7 +69,10 @@ def trainer_routes(app: FastAPI) -> None:
         if source == "database":
             result = trainer.train_from_repository(alias=alias)
         elif source == "csv":
-            result = trainer.train_from_csv(app.state.settings.producer_export_path, alias or app.state.settings.mlflow_champion_alias)
+            result = trainer.train_from_csv(
+                app.state.settings.producer_export_path,
+                alias or app.state.settings.mlflow_champion_alias,
+            )
         else:
             raise HTTPException(status_code=400, detail="source must be 'database' or 'csv'")
         return {
@@ -90,4 +93,6 @@ app = build_app()
 
 def run() -> None:
     settings = TrainerSettings()
-    uvicorn.run("fraud_platform_trainer.main:app", host=settings.host, port=settings.port, reload=False)
+    uvicorn.run(
+        "fraud_platform_trainer.main:app", host=settings.host, port=settings.port, reload=False
+    )

@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-
 from fraud_platform_producer.main import build_app
 
 

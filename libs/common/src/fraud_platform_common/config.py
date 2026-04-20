@@ -54,7 +54,9 @@ class RuntimeSettings(BaseSettings):
     producer_max_events: int | None = Field(default=None, alias="PRODUCER_MAX_EVENTS")
     producer_fraud_ratio: float = Field(default=0.18, alias="PRODUCER_FRAUD_RATIO")
     producer_random_seed: int = Field(default=42, alias="PRODUCER_RANDOM_SEED")
-    producer_export_path: str = Field(default="data/bootstrap_transactions.csv", alias="PRODUCER_EXPORT_PATH")
+    producer_export_path: str = Field(
+        default="data/bootstrap_transactions.csv", alias="PRODUCER_EXPORT_PATH"
+    )
 
     feature_window_1m_seconds: int = Field(default=60, alias="FEATURE_WINDOW_1M_SECONDS")
     feature_window_5m_seconds: int = Field(default=300, alias="FEATURE_WINDOW_5M_SECONDS")

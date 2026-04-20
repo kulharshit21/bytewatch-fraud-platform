@@ -4,21 +4,21 @@ import time
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.responses import ORJSONResponse, PlainTextResponse
-
-from fraud_platform_common.config import RuntimeSettings
-from fraud_platform_common.logging import configure_logging
 from fraud_platform_contracts import DependencyStatus, HealthResponse
 from fraud_platform_observability.metrics import (
     HTTP_REQUEST_COUNTER,
     HTTP_REQUEST_DURATION_SECONDS,
     render_metrics,
 )
+
+from fraud_platform_common.config import RuntimeSettings
+from fraud_platform_common.logging import configure_logging
 
 LOGGER = logging.getLogger(__name__)
 LifecycleCallback = Any
@@ -32,7 +32,9 @@ class DependencyTarget:
     required: bool = True
 
 
-def dependency_from_url(name: str, value: str, default_port: int, required: bool = True) -> DependencyTarget:
+def dependency_from_url(
+    name: str, value: str, default_port: int, required: bool = True
+) -> DependencyTarget:
     parsed = urlparse(value)
     host = parsed.hostname or "localhost"
     port = parsed.port or default_port
@@ -43,7 +45,9 @@ def dependency_from_hostport(
     name: str, value: str, default_port: int, required: bool = True
 ) -> DependencyTarget:
     if "://" in value:
-        return dependency_from_url(name=name, value=value, default_port=default_port, required=required)
+        return dependency_from_url(
+            name=name, value=value, default_port=default_port, required=required
+        )
 
     host, _, port = value.partition(":")
     return DependencyTarget(
@@ -57,7 +61,9 @@ def dependency_from_hostport(
 def _probe_dependency(target: DependencyTarget, timeout_seconds: float = 1.0) -> DependencyStatus:
     try:
         with socket.create_connection((target.host, target.port), timeout=timeout_seconds):
-            return DependencyStatus(name=target.name, healthy=True, host=target.host, port=target.port)
+            return DependencyStatus(
+                name=target.name, healthy=True, host=target.host, port=target.port
+            )
     except OSError as exc:
         return DependencyStatus(
             name=target.name,
@@ -143,7 +149,7 @@ def create_service_app(
             service=settings.service_name,
             version=settings.version,
             status="live",
-            checked_at=datetime.now(timezone.utc),
+            checked_at=datetime.now(UTC),
             dependencies=[],
         )
 
@@ -155,10 +161,12 @@ def create_service_app(
             service=settings.service_name,
             version=settings.version,
             status="ready" if is_healthy else "degraded",
-            checked_at=datetime.now(timezone.utc),
+            checked_at=datetime.now(UTC),
             dependencies=statuses,
         )
-        return ORJSONResponse(status_code=200 if is_healthy else 503, content=response.model_dump(mode="json"))
+        return ORJSONResponse(
+            status_code=200 if is_healthy else 503, content=response.model_dump(mode="json")
+        )
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics() -> PlainTextResponse:

@@ -1,11 +1,10 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from fraud_platform_common.config import RuntimeSettings
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
-
-from fraud_platform_common.config import RuntimeSettings
 
 
 def build_engine(settings: RuntimeSettings) -> Engine:

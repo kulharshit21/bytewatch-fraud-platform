@@ -12,6 +12,13 @@ import numpy as np
 import pandas as pd
 from evidently import Report
 from evidently.presets import DataDriftPreset
+from fraud_platform_common.config import RuntimeSettings
+from fraud_platform_contracts import ModelMetadata, TransactionEvent, load_json
+from fraud_platform_feature_engineering import MODEL_FEATURE_FIELDS, compute_feature_values
+from fraud_platform_feature_store import MemoryFeatureStore
+from fraud_platform_observability.metrics import DRIFT_SCORE_GAUGE
+from fraud_platform_persistence import FraudRepository
+from fraud_platform_producer.generation import SyntheticTransactionGenerator
 from mlflow import MlflowClient
 from sklearn.metrics import (
     average_precision_score,
@@ -22,14 +29,6 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from xgboost import XGBClassifier
-
-from fraud_platform_common.config import RuntimeSettings
-from fraud_platform_contracts import ModelMetadata, TransactionEvent, load_json
-from fraud_platform_feature_engineering import MODEL_FEATURE_FIELDS, compute_feature_values
-from fraud_platform_feature_store import MemoryFeatureStore
-from fraud_platform_observability.metrics import DRIFT_SCORE_GAUGE
-from fraud_platform_persistence import FraudRepository
-from fraud_platform_producer.generation import SyntheticTransactionGenerator
 
 
 @dataclass(slots=True)
@@ -73,13 +72,13 @@ class FraudTrainer:
     def train_from_repository(self, alias: str | None = None) -> TrainingArtifacts:
         raw_rows = self.repository.training_frame()
         events = [
-            self._coerce_transaction_event(row)
-            for row in raw_rows
-            if row.get("label") is not None
+            self._coerce_transaction_event(row) for row in raw_rows if row.get("label") is not None
         ]
         if len(events) < 200:
             dataset_path = self._ensure_dataset(3000)
-            return self.train_from_csv(dataset_path, alias=alias or self.settings.mlflow_champion_alias)
+            return self.train_from_csv(
+                dataset_path, alias=alias or self.settings.mlflow_champion_alias
+            )
         frame = self._build_feature_frame(events)
         return self._train(
             frame,
@@ -99,8 +98,12 @@ class FraudTrainer:
         if len(current_events) < 50:
             current_events = reference_events[-sample_size:]
 
-        reference_df = self._build_feature_frame(reference_events).tail(sample_size).reset_index(drop=True)
-        current_df = self._build_feature_frame(current_events).tail(sample_size).reset_index(drop=True)
+        reference_df = (
+            self._build_feature_frame(reference_events).tail(sample_size).reset_index(drop=True)
+        )
+        current_df = (
+            self._build_feature_frame(current_events).tail(sample_size).reset_index(drop=True)
+        )
 
         output_dir = Path(self.settings.data_dir) / "drift"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -189,7 +192,9 @@ class FraudTrainer:
             store.update_state(event)
         return pd.DataFrame(rows)
 
-    def _train(self, feature_frame: pd.DataFrame, *, dataset_path: str, alias: str) -> TrainingArtifacts:
+    def _train(
+        self, feature_frame: pd.DataFrame, *, dataset_path: str, alias: str
+    ) -> TrainingArtifacts:
         if feature_frame.empty:
             raise ValueError("No feature rows available for training.")
 
@@ -252,7 +257,9 @@ class FraudTrainer:
                 registered_model_name=self.settings.mlflow_model_name,
             )
 
-            version = self._lookup_model_version(client, run.info.run_id, self.settings.mlflow_model_name)
+            version = self._lookup_model_version(
+                client, run.info.run_id, self.settings.mlflow_model_name
+            )
             client.set_registered_model_alias(
                 self.settings.mlflow_model_name,
                 alias,
@@ -311,7 +318,11 @@ class FraudTrainer:
             )
         best_f1 = max(rows, key=lambda row: row["f1"])
         precision_candidates = [row for row in rows if row["precision"] >= 0.85]
-        best_precision = precision_candidates[-1] if precision_candidates else max(rows, key=lambda row: row["precision"])
+        best_precision = (
+            precision_candidates[-1]
+            if precision_candidates
+            else max(rows, key=lambda row: row["precision"])
+        )
         return {
             "rows": rows,
             "best_f1_threshold": best_f1["threshold"],

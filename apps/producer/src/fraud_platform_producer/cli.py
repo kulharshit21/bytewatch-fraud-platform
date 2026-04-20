@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from fraud_platform_common.config import RuntimeSettings
+
 from fraud_platform_producer.runtime import ProducerRuntime
 
 
@@ -14,7 +15,9 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--output", required=True)
     export.add_argument("--events", type=int, default=3000)
 
-    publish_once = subcommands.add_parser("publish-once", help="Publish a single transaction to Kafka")
+    publish_once = subcommands.add_parser(
+        "publish-once", help="Publish a single transaction to Kafka"
+    )
     publish_once.add_argument("--count", type=int, default=1)
     return parser
 

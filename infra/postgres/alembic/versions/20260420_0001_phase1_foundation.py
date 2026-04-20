@@ -1,7 +1,7 @@
 """Phase 1 foundation schema."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
@@ -51,13 +51,15 @@ def upgrade() -> None:
             after_next_month date := (date_trunc('month', now()) + interval '2 month')::date;
         BEGIN
             EXECUTE format(
-                'CREATE TABLE IF NOT EXISTS transactions_raw_%s PARTITION OF transactions_raw FOR VALUES FROM (%L) TO (%L)',
+                'CREATE TABLE IF NOT EXISTS transactions_raw_%s '
+                'PARTITION OF transactions_raw FOR VALUES FROM (%L) TO (%L)',
                 to_char(start_month, 'YYYYMM'),
                 start_month,
                 next_month
             );
             EXECUTE format(
-                'CREATE TABLE IF NOT EXISTS transactions_raw_%s PARTITION OF transactions_raw FOR VALUES FROM (%L) TO (%L)',
+                'CREATE TABLE IF NOT EXISTS transactions_raw_%s '
+                'PARTITION OF transactions_raw FOR VALUES FROM (%L) TO (%L)',
                 to_char(next_month, 'YYYYMM'),
                 next_month,
                 after_next_month
@@ -107,13 +109,15 @@ def upgrade() -> None:
             after_next_month date := (date_trunc('month', now()) + interval '2 month')::date;
         BEGIN
             EXECUTE format(
-                'CREATE TABLE IF NOT EXISTS transactions_scored_%s PARTITION OF transactions_scored FOR VALUES FROM (%L) TO (%L)',
+                'CREATE TABLE IF NOT EXISTS transactions_scored_%s '
+                'PARTITION OF transactions_scored FOR VALUES FROM (%L) TO (%L)',
                 to_char(start_month, 'YYYYMM'),
                 start_month,
                 next_month
             );
             EXECUTE format(
-                'CREATE TABLE IF NOT EXISTS transactions_scored_%s PARTITION OF transactions_scored FOR VALUES FROM (%L) TO (%L)',
+                'CREATE TABLE IF NOT EXISTS transactions_scored_%s '
+                'PARTITION OF transactions_scored FOR VALUES FROM (%L) TO (%L)',
                 to_char(next_month, 'YYYYMM'),
                 next_month,
                 after_next_month
@@ -166,7 +170,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_model_registry_cache_alias", "model_registry_cache", ["alias"])
-    op.create_index("ix_model_registry_cache_model_version", "model_registry_cache", ["model_version"])
+    op.create_index(
+        "ix_model_registry_cache_model_version", "model_registry_cache", ["model_version"]
+    )
 
     op.create_table(
         "audit_logs",
@@ -187,7 +193,9 @@ def upgrade() -> None:
     op.execute("CREATE INDEX ix_transactions_raw_merchant_id ON transactions_raw (merchant_id)")
     op.execute("CREATE INDEX ix_transactions_scored_event_time ON transactions_scored (event_time)")
     op.execute("CREATE INDEX ix_transactions_scored_decision ON transactions_scored (decision)")
-    op.execute("CREATE INDEX ix_transactions_scored_model_version ON transactions_scored (model_version)")
+    op.execute(
+        "CREATE INDEX ix_transactions_scored_model_version ON transactions_scored (model_version)"
+    )
 
 
 def downgrade() -> None:

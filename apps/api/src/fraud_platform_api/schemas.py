@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
-
 from fraud_platform_contracts import FeedbackLabel, TransactionEvent
+from pydantic import BaseModel, Field
 
 
 class PredictRequest(TransactionEvent):

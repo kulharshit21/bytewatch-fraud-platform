@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from kafka import KafkaProducer
-
 from fraud_platform_common.config import RuntimeSettings
 from fraud_platform_contracts import TransactionEvent, dump_json
 from fraud_platform_observability.metrics import PRODUCER_EVENTS_COUNTER
+from kafka import KafkaProducer
+
 from fraud_platform_producer.generation import SyntheticTransactionGenerator
 
 

@@ -4,10 +4,9 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-
-from fraud_platform_persistence.base import Base
 from fraud_platform_persistence import models  # noqa: F401
+from fraud_platform_persistence.base import Base
+from sqlalchemy import engine_from_config, pool
 
 config = context.config
 

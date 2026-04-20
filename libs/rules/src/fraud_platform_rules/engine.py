@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-
 from fraud_platform_contracts import RuleHit, Severity, TransactionEvent
 
 
@@ -24,7 +23,7 @@ class RuleEngine:
         self.definitions = definitions
 
     @classmethod
-    def from_yaml(cls, path: str) -> "RuleEngine":
+    def from_yaml(cls, path: str) -> RuleEngine:
         payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
         definitions = [
             RuleDefinition(
@@ -101,10 +100,13 @@ class RuleEngine:
             return matched, {"tx_count": tx_count, "amount": amount}
 
         if definition.type == "high_amount_new_device":
-            matched = bool(features.get("device_new_for_account", 0.0)) and float(event.amount) >= float(
-                params["amount_threshold"]
-            )
-            return matched, {"amount": event.amount, "device_new": features.get("device_new_for_account", 0.0)}
+            matched = bool(features.get("device_new_for_account", 0.0)) and float(
+                event.amount
+            ) >= float(params["amount_threshold"])
+            return matched, {
+                "amount": event.amount,
+                "device_new": features.get("device_new_for_account", 0.0),
+            }
 
         if definition.type == "geo_combo":
             matched = bool(features.get("international_mismatch", 0.0)) and bool(

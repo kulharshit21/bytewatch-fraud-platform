@@ -6,15 +6,19 @@ import uuid
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from kafka import KafkaProducer
-
-from fraud_platform_api.schemas import FeedbackRequest, PredictRequest
 from fraud_platform_common.config import RuntimeSettings
-from fraud_platform_common.service import create_service_app, dependency_from_hostport, dependency_from_url
+from fraud_platform_common.service import (
+    create_service_app,
+    dependency_from_hostport,
+    dependency_from_url,
+)
 from fraud_platform_contracts import AnalystFeedbackEvent, dump_json
 from fraud_platform_persistence import FraudRepository
 from fraud_platform_stream_worker.processor import FraudStreamProcessor
 from fraud_platform_trainer.training import FraudTrainer
+from kafka import KafkaProducer
+
+from fraud_platform_api.schemas import FeedbackRequest, PredictRequest
 
 logger = logging.getLogger(__name__)
 
@@ -203,13 +207,17 @@ def api_routes(app: FastAPI) -> None:
     async def receive_grafana_alert(payload: dict[str, object]) -> dict[str, object]:
         alerts = payload.get("alerts")
         alert_count = len(alerts) if isinstance(alerts, list) else 0
-        statuses = sorted(
-            {
-                str(item.get("status"))
-                for item in alerts
-                if isinstance(item, dict) and item.get("status") is not None
-            }
-        ) if isinstance(alerts, list) else []
+        statuses = (
+            sorted(
+                {
+                    str(item.get("status"))
+                    for item in alerts
+                    if isinstance(item, dict) and item.get("status") is not None
+                }
+            )
+            if isinstance(alerts, list)
+            else []
+        )
         logger.info(
             "received local grafana alert webhook",
             extra={

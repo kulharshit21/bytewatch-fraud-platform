@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fraud_platform_contracts import TransactionEvent
 from fraud_platform_feature_engineering import FeatureContext, RecentTransaction
+
 from fraud_platform_feature_store.base import FeatureStore
 
 
@@ -45,7 +46,9 @@ class MemoryFeatureStore(FeatureStore):
             rolling_count_30d=int(profile.get("rolling_count_30d", 0)),
             known_device=event.device_id in self._devices[event.account_id],
             known_merchant=event.merchant_id in self._merchants[event.account_id],
-            account_merchant_tx_count_30d=self._merchant_counts[(event.account_id, event.merchant_id)],
+            account_merchant_tx_count_30d=self._merchant_counts[
+                (event.account_id, event.merchant_id)
+            ],
             last_transaction_time=profile.get("last_transaction_time"),  # type: ignore[arg-type]
             last_latitude=profile.get("last_latitude"),  # type: ignore[arg-type]
             last_longitude=profile.get("last_longitude"),  # type: ignore[arg-type]

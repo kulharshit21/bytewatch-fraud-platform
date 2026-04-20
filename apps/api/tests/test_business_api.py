@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
-
 from fraud_platform_contracts import (
     DecisionEvent,
     EnrichedTransactionEvent,
@@ -54,7 +53,10 @@ class FakeRepository:
         self.event_id = str(uuid4())
 
     def get_transaction(self, transaction_id):
-        return {"raw": {"transaction_id": transaction_id}, "scored": {"score": 0.92, "decision": "BLOCK"}}
+        return {
+            "raw": {"transaction_id": transaction_id},
+            "scored": {"score": 0.92, "decision": "BLOCK"},
+        }
 
     def list_cases(self, **kwargs):
         return {
@@ -91,13 +93,17 @@ class FakeRepository:
                 "review_threshold": 0.55,
                 "block_threshold": 0.82,
             },
-            "rule_hits": [{"rule_id": "velocity", "explanation": "Velocity spike", "severity": "high"}],
+            "rule_hits": [
+                {"rule_id": "velocity", "explanation": "Velocity spike", "severity": "high"}
+            ],
             "raw_transaction": {"event_id": self.event_id, "transaction_id": self.transaction_id},
             "score": 0.92,
             "reason_codes": [{"code": "velocity_spike", "description": "Velocity elevated"}],
             "features": {"tx_count_5m": 7.0},
             "feedback": self.feedback,
-            "timeline": [{"type": "scored", "timestamp": "2026-04-20T00:00:00+00:00", "detail": "Scored"}],
+            "timeline": [
+                {"type": "scored", "timestamp": "2026-04-20T00:00:00+00:00", "detail": "Scored"}
+            ],
         }
 
     def add_feedback(self, feedback):
@@ -147,7 +153,15 @@ class FakeProcessor:
     def __init__(self, *args, **kwargs):
         self.feature_store = FakeFeatureStore(set())
         self.repository = FakeRepository()
-        self.model_runtime = type("Loaded", (), {"reload": lambda self: type("Model", (), {"metadata": FakeTrainer().get_current_metadata()})()})()
+        self.model_runtime = type(
+            "Loaded",
+            (),
+            {
+                "reload": lambda self: type(
+                    "Model", (), {"metadata": FakeTrainer().get_current_metadata()}
+                )()
+            },
+        )()
 
     def process_event(self, event, source_topic):
         validated = ValidatedTransactionEvent(
@@ -192,7 +206,11 @@ class FakeProcessor:
             reason_codes=scored.reason_codes,
             simulation_scenario=scored.simulation_scenario,
         )
-        return type("Bundle", (), {"validated": validated, "enriched": enriched, "scored": scored, "decision": decision})()
+        return type(
+            "Bundle",
+            (),
+            {"validated": validated, "enriched": enriched, "scored": scored, "decision": decision},
+        )()
 
     def persist_bundle(self, bundle, source_topic):
         return None

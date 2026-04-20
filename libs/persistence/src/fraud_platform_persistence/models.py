@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import JSON, DateTime, Float, Index, Numeric, String, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
@@ -11,11 +11,13 @@ JsonType = JSON().with_variant(JSONB, "postgresql")
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -45,7 +47,9 @@ class RawTransaction(TimestampMixin, Base):
     scenario: Mapped[str | None] = mapped_column(String(64))
     payload: Mapped[dict] = mapped_column(JsonType, nullable=False, default=dict)
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class ScoredTransaction(TimestampMixin, Base):
@@ -89,7 +93,9 @@ class FraudDecision(TimestampMixin, Base):
     case_status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
     model_metadata: Mapped[dict] = mapped_column(JsonType, nullable=False, default=dict)
     rule_hits: Mapped[list[dict]] = mapped_column(JsonType, nullable=False, default=list)
-    decision_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    decision_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class AnalystFeedback(TimestampMixin, Base):

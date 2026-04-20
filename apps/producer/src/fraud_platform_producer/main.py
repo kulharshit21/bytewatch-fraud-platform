@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uvicorn
 from fastapi import FastAPI
-
 from fraud_platform_common.config import RuntimeSettings
 from fraud_platform_common.service import create_service_app, dependency_from_hostport
+
 from fraud_platform_producer.runtime import ProducerRuntime
 
 
@@ -55,7 +55,9 @@ def runtime_routes(app: FastAPI) -> None:
         return {
             "running": runtime.stats.running,
             "generated_events": runtime.stats.generated_events,
-            "started_at": None if runtime.stats.started_at is None else runtime.stats.started_at.isoformat(),
+            "started_at": None
+            if runtime.stats.started_at is None
+            else runtime.stats.started_at.isoformat(),
             "rate_per_second": app.state.settings.producer_rate_per_second,
             "fraud_ratio": app.state.settings.producer_fraud_ratio,
         }
@@ -83,4 +85,6 @@ app = build_app()
 
 def run() -> None:
     settings = ProducerSettings()
-    uvicorn.run("fraud_platform_producer.main:app", host=settings.host, port=settings.port, reload=False)
+    uvicorn.run(
+        "fraud_platform_producer.main:app", host=settings.host, port=settings.port, reload=False
+    )

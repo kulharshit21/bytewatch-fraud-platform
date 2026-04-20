@@ -7,9 +7,6 @@ from math import ceil
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import desc, func, select
-from sqlalchemy.orm import Session, sessionmaker
-
 from fraud_platform_common.config import RuntimeSettings
 from fraud_platform_contracts import (
     AnalystFeedbackEvent,
@@ -18,6 +15,9 @@ from fraud_platform_contracts import (
     ScoredTransactionEvent,
     TransactionEvent,
 )
+from sqlalchemy import desc, func, select
+from sqlalchemy.orm import Session, sessionmaker
+
 from fraud_platform_persistence.db import build_session_factory
 from fraud_platform_persistence.models import (
     AnalystFeedback,
@@ -319,7 +319,10 @@ class FraudRepository:
                     {
                         "type": "scored",
                         "timestamp": scored.event_time.isoformat(),
-                        "detail": f"Scored {scored.score:.3f} with {scored.model_name} {scored.model_version}",
+                        "detail": (
+                            f"Scored {scored.score:.3f} "
+                            f"with {scored.model_name} {scored.model_version}"
+                        ),
                     }
                 )
             timeline.extend(
@@ -359,15 +362,23 @@ class FraudRepository:
         with self._session() as session:
             since = datetime.now(UTC) - timedelta(hours=hours)
             base_query = select(ScoredTransaction).where(ScoredTransaction.event_time >= since)
-            total = session.execute(select(func.count()).select_from(base_query.subquery())).scalar_one()
+            total = session.execute(
+                select(func.count()).select_from(base_query.subquery())
+            ).scalar_one()
             block = session.execute(
-                select(func.count()).select_from(base_query.where(ScoredTransaction.decision == "BLOCK").subquery())
+                select(func.count()).select_from(
+                    base_query.where(ScoredTransaction.decision == "BLOCK").subquery()
+                )
             ).scalar_one()
             review = session.execute(
-                select(func.count()).select_from(base_query.where(ScoredTransaction.decision == "REVIEW").subquery())
+                select(func.count()).select_from(
+                    base_query.where(ScoredTransaction.decision == "REVIEW").subquery()
+                )
             ).scalar_one()
             avg_score = session.execute(
-                select(func.avg(ScoredTransaction.score)).where(ScoredTransaction.event_time >= since)
+                select(func.avg(ScoredTransaction.score)).where(
+                    ScoredTransaction.event_time >= since
+                )
             ).scalar_one()
             return {
                 "window_hours": hours,
@@ -438,7 +449,9 @@ class FraudRepository:
                     payload["feedback_count"] = 0
                     payload["feedback_labels"] = []
                     payload["latest_feedback_label"] = None
-                    payload["label_source"] = "synthetic" if payload.get("label") is not None else "unlabeled"
+                    payload["label_source"] = (
+                        "synthetic" if payload.get("label") is not None else "unlabeled"
+                    )
                 items.append(payload)
             return items
 

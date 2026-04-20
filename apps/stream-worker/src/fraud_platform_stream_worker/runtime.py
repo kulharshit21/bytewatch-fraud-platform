@@ -40,7 +40,12 @@ class WorkerRuntime:
         self.status.running = False
 
     def healthy(self) -> bool:
-        return bool(self.status.running and self._thread and self._thread.is_alive() and self._last_exception is None)
+        return bool(
+            self.status.running
+            and self._thread
+            and self._thread.is_alive()
+            and self._last_exception is None
+        )
 
     def _run(self) -> None:
         try:

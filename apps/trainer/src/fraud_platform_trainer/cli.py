@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict, is_dataclass
 
 from fraud_platform_common.config import RuntimeSettings
+
 from fraud_platform_trainer.training import FraudTrainer
 
 
@@ -12,8 +13,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Fraud platform trainer CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    bootstrap = subparsers.add_parser("bootstrap-model", help="Train and register a champion model if one does not exist.")
-    bootstrap.add_argument("--force", action="store_true", help="Retrain even if a champion alias already exists.")
+    bootstrap = subparsers.add_parser(
+        "bootstrap-model", help="Train and register a champion model if one does not exist."
+    )
+    bootstrap.add_argument(
+        "--force", action="store_true", help="Retrain even if a champion alias already exists."
+    )
 
     train_csv = subparsers.add_parser("train-csv", help="Train from a CSV export.")
     train_csv.add_argument("--dataset", required=True, help="Path to CSV dataset.")
@@ -34,7 +39,9 @@ def main() -> None:
     if args.command == "bootstrap-model":
         result = trainer.bootstrap_model(force=args.force)
     elif args.command == "train-csv":
-        result = trainer.train_from_csv(args.dataset, alias=args.alias or settings.mlflow_champion_alias)
+        result = trainer.train_from_csv(
+            args.dataset, alias=args.alias or settings.mlflow_champion_alias
+        )
     else:
         result = trainer.generate_drift_report(sample_size=args.sample_size)
 

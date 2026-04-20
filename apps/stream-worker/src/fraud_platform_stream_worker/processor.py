@@ -6,7 +6,6 @@ from typing import Any
 from uuid import UUID
 
 from bytewax.connectors.kafka import KafkaSinkMessage
-
 from fraud_platform_common.config import RuntimeSettings
 from fraud_platform_contracts import (
     DeadLetterEvent,
@@ -22,7 +21,11 @@ from fraud_platform_contracts import (
 from fraud_platform_feature_engineering import compute_feature_values
 from fraud_platform_feature_store import RedisFeatureStore
 from fraud_platform_model_runtime import ModelRuntime
-from fraud_platform_observability.metrics import DLQ_COUNTER, WORKER_EVENTS_COUNTER, WORKER_LATENCY_SECONDS
+from fraud_platform_observability.metrics import (
+    DLQ_COUNTER,
+    WORKER_EVENTS_COUNTER,
+    WORKER_LATENCY_SECONDS,
+)
 from fraud_platform_persistence import FraudRepository
 from fraud_platform_rules import RuleEngine
 

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import threading
+
 import uvicorn
 from fastapi import FastAPI
-
 from fraud_platform_common.config import RuntimeSettings
-from fraud_platform_common.service import create_service_app, dependency_from_hostport, dependency_from_url
+from fraud_platform_common.service import (
+    create_service_app,
+    dependency_from_hostport,
+    dependency_from_url,
+)
+
 from fraud_platform_stream_worker.runtime import WorkerRuntime, monitor_runtime
 
 
@@ -51,7 +56,10 @@ def build_app() -> FastAPI:
     settings = StreamWorkerSettings()
     app = create_service_app(
         settings=settings,
-        description="Bytewax stream worker consuming tx.raw and emitting validated, enriched, scored, and decision events.",
+        description=(
+            "Bytewax stream worker consuming tx.raw and emitting validated, "
+            "enriched, scored, and decision events."
+        ),
         dependencies=[
             dependency_from_hostport("kafka", settings.kafka_bootstrap_servers, 9092),
             dependency_from_url("redis", settings.redis_url, 6379),
@@ -83,7 +91,9 @@ def runtime_routes(app: FastAPI) -> None:
         runtime: WorkerRuntime = app.state.runtime
         return {
             "running": runtime.status.running,
-            "started_at": None if runtime.status.started_at is None else runtime.status.started_at.isoformat(),
+            "started_at": None
+            if runtime.status.started_at is None
+            else runtime.status.started_at.isoformat(),
             "last_error": runtime.status.last_error,
             "healthy": runtime.healthy(),
         }
@@ -100,4 +110,9 @@ app = build_app()
 
 def run() -> None:
     settings = StreamWorkerSettings()
-    uvicorn.run("fraud_platform_stream_worker.main:app", host=settings.host, port=settings.port, reload=False)
+    uvicorn.run(
+        "fraud_platform_stream_worker.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=False,
+    )

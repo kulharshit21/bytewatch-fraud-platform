@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from fraud_platform_common.config import RuntimeSettings
 from fraud_platform_producer.generation import SyntheticTransactionGenerator
 from fraud_platform_trainer.training import FraudTrainer
