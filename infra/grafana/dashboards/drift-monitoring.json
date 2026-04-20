@@ -1,0 +1,55 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "fraud_platform_drift_score",
+          "legendFormat": "{{metric}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest Drift Score",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "max_over_time(fraud_platform_drift_score[24h])",
+          "legendFormat": "24h max",
+          "refId": "A"
+        }
+      ],
+      "title": "Peak Drift Over 24h",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "id": 3,
+      "options": {
+        "content": "Drift values are written by the trainer after Evidently report generation. Use the trainer service or CLI to generate fresh reports and update the Prometheus-backed gauges.",
+        "mode": "markdown"
+      },
+      "title": "Drift Workflow",
+      "type": "text"
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["fraud", "drift"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "Drift Monitoring",
+  "uid": "drift-monitoring",
+  "version": 2
+}

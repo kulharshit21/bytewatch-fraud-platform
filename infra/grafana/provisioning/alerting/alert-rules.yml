@@ -1,0 +1,167 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: fraud-platform
+    folder: Fraud Platform Alerts
+    interval: 1m
+    rules:
+      - uid: api-error-rate
+        title: API Error Rate Elevated
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              editorMode: code
+              expr: sum(rate(fraud_platform_http_requests_total{service="api",status_code=~"5.."}[5m])) / clamp_min(sum(rate(fraud_platform_http_requests_total{service="api"}[5m])), 1)
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 0, to: 0 }
+            model:
+              expression: $A > 0.02
+              type: math
+              refId: B
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: API 5xx ratio is above 2% for five minutes.
+        labels:
+          severity: warning
+
+      - uid: dlq-burst
+        title: DLQ Burst Detected
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              editorMode: code
+              expr: sum(rate(fraud_platform_dlq_events_total[5m]))
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 0, to: 0 }
+            model:
+              expression: $A > 0.01
+              type: math
+              refId: B
+        noDataState: OK
+        execErrState: Error
+        for: 3m
+        annotations:
+          summary: Dead-letter queue rate has risen above the expected baseline.
+        labels:
+          severity: warning
+
+      - uid: worker-latency
+        title: Worker Latency High
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              editorMode: code
+              expr: histogram_quantile(0.95, sum(rate(fraud_platform_worker_stage_latency_seconds_bucket{stage="end_to_end"}[5m])) by (le))
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 0, to: 0 }
+            model:
+              expression: $A > 1
+              type: math
+              refId: B
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: End-to-end worker p95 latency is above one second.
+        labels:
+          severity: warning
+
+      - uid: redis-latency
+        title: Redis Latency High
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              editorMode: code
+              expr: histogram_quantile(0.95, sum(rate(fraud_platform_redis_operation_latency_seconds_bucket[5m])) by (le))
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 0, to: 0 }
+            model:
+              expression: $A > 0.05
+              type: math
+              refId: B
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: Redis p95 operation latency is above 50ms.
+        labels:
+          severity: warning
+
+      - uid: drift-threshold
+        title: Drift Threshold Exceeded
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              editorMode: code
+              expr: max_over_time(fraud_platform_drift_score{metric="dataset_drift_score"}[15m])
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 0, to: 0 }
+            model:
+              expression: $A > 0.3
+              type: math
+              refId: B
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        annotations:
+          summary: Evidently dataset drift score is above 0.30.
+        labels:
+          severity: critical

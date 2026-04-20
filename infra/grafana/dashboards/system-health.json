@@ -1,0 +1,74 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(fraud_platform_http_requests_total{service=\"api\",status_code=~\"5..\"}[5m]))",
+          "legendFormat": "api 5xx",
+          "refId": "A"
+        }
+      ],
+      "title": "API Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(fraud_platform_worker_stage_latency_seconds_bucket{stage=\"end_to_end\"}[5m])) by (le))",
+          "legendFormat": "worker p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Worker End-To-End p95 Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(fraud_platform_redis_operation_latency_seconds_bucket[5m])) by (le, operation))",
+          "legendFormat": "{{operation}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Redis Operation p95 Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(fraud_platform_dlq_events_total[5m])) by (failed_stage)",
+          "legendFormat": "{{failed_stage}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Dead Letter Queue Rate",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["fraud", "system"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "System Health",
+  "uid": "system-health",
+  "version": 2
+}

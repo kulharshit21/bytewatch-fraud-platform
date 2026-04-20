@@ -1,0 +1,386 @@
+services:
+  kafka:
+    image: apache/kafka:3.9.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 6
+    ports:
+      - "29092:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks:
+      - fraud-platform
+
+  kafka-init:
+    image: apache/kafka:3.9.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./infra/kafka/create-topics.sh:/scripts/create-topics.sh:ro
+    entrypoint: ["/bin/bash", "/scripts/create-topics.sh"]
+    networks:
+      - fraud-platform
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fraud-platform
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fraud_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-fraud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fraud}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fraud} -d ${POSTGRES_DB:-fraud_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - fraud-platform
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://localhost:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-platform
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-platform
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: infra/docker/mlflow/Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-platform
+
+  db-migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/api/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://fraud:fraud@postgres:5432/fraud_platform}
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - fraud-platform
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://fraud:fraud@postgres:5432/fraud_platform}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      API_HOST: ${API_HOST:-0.0.0.0}
+      API_PORT: ${API_PORT:-8000}
+      MODEL_LOCAL_CACHE_DIR: ${MODEL_LOCAL_CACHE_DIR:-/tmp/fraud-platform-model-cache}
+      MLFLOW_MODEL_NAME: ${MLFLOW_MODEL_NAME:-fraud_xgboost}
+      MLFLOW_CHAMPION_ALIAS: ${MLFLOW_CHAMPION_ALIAS:-champion}
+      MLFLOW_CHALLENGER_ALIAS: ${MLFLOW_CHALLENGER_ALIAS:-challenger}
+      MODEL_BLOCK_THRESHOLD: ${MODEL_BLOCK_THRESHOLD:-0.82}
+      MODEL_REVIEW_THRESHOLD: ${MODEL_REVIEW_THRESHOLD:-0.55}
+      KAFKA_FEEDBACK_TOPIC: ${KAFKA_FEEDBACK_TOPIC:-tx.feedback}
+    ports:
+      - "8000:8000"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      db-migrate:
+        condition: service_completed_successfully
+      model-bootstrap:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-platform
+
+  producer:
+    build:
+      context: .
+      dockerfile: infra/docker/producer/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://fraud:fraud@postgres:5432/fraud_platform}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      PRODUCER_PORT: ${PRODUCER_PORT:-8001}
+      PRODUCER_AUTOSTART: ${PRODUCER_AUTOSTART:-true}
+      PRODUCER_RATE_PER_SECOND: ${PRODUCER_RATE_PER_SECOND:-3.0}
+      PRODUCER_MAX_EVENTS: ${PRODUCER_MAX_EVENTS:-}
+      PRODUCER_FRAUD_RATIO: ${PRODUCER_FRAUD_RATIO:-0.18}
+      PRODUCER_RANDOM_SEED: ${PRODUCER_RANDOM_SEED:-42}
+      PRODUCER_EXPORT_PATH: ${PRODUCER_EXPORT_PATH:-/data/bootstrap_transactions.csv}
+      KAFKA_RAW_TOPIC: ${KAFKA_RAW_TOPIC:-tx.raw}
+    ports:
+      - "8001:8001"
+    volumes:
+      - producer_data:/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/live', timeout=2)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-platform
+
+  stream-worker:
+    build:
+      context: .
+      dockerfile: infra/docker/stream-worker/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://fraud:fraud@postgres:5432/fraud_platform}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      STREAM_WORKER_PORT: ${STREAM_WORKER_PORT:-8002}
+      MODEL_LOCAL_CACHE_DIR: ${MODEL_LOCAL_CACHE_DIR:-/tmp/fraud-platform-model-cache}
+      MLFLOW_MODEL_NAME: ${MLFLOW_MODEL_NAME:-fraud_xgboost}
+      MLFLOW_CHAMPION_ALIAS: ${MLFLOW_CHAMPION_ALIAS:-champion}
+      MODEL_BLOCK_THRESHOLD: ${MODEL_BLOCK_THRESHOLD:-0.82}
+      MODEL_REVIEW_THRESHOLD: ${MODEL_REVIEW_THRESHOLD:-0.55}
+      KAFKA_RAW_TOPIC: ${KAFKA_RAW_TOPIC:-tx.raw}
+      KAFKA_VALIDATED_TOPIC: ${KAFKA_VALIDATED_TOPIC:-tx.validated}
+      KAFKA_ENRICHED_TOPIC: ${KAFKA_ENRICHED_TOPIC:-tx.enriched}
+      KAFKA_SCORED_TOPIC: ${KAFKA_SCORED_TOPIC:-tx.scored}
+      KAFKA_DECISIONS_TOPIC: ${KAFKA_DECISIONS_TOPIC:-tx.decisions}
+      KAFKA_DLQ_TOPIC: ${KAFKA_DLQ_TOPIC:-tx.dlq}
+      FEATURE_WINDOW_1M_SECONDS: ${FEATURE_WINDOW_1M_SECONDS:-60}
+      FEATURE_WINDOW_5M_SECONDS: ${FEATURE_WINDOW_5M_SECONDS:-300}
+      FEATURE_WINDOW_1H_SECONDS: ${FEATURE_WINDOW_1H_SECONDS:-3600}
+      FEATURE_PROFILE_TTL_SECONDS: ${FEATURE_PROFILE_TTL_SECONDS:-2592000}
+      STREAM_AUTOSTART: ${STREAM_AUTOSTART:-true}
+      RULES_CONFIG_PATH: ${RULES_CONFIG_PATH:-/workspace/libs/rules/src/fraud_platform_rules/config/default_rules.yml}
+    ports:
+      - "8002:8002"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      db-migrate:
+        condition: service_completed_successfully
+      model-bootstrap:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health/live', timeout=2)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-platform
+
+  trainer:
+    build:
+      context: .
+      dockerfile: infra/docker/trainer/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://fraud:fraud@postgres:5432/fraud_platform}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      TRAINER_PORT: ${TRAINER_PORT:-8003}
+      MLFLOW_MODEL_NAME: ${MLFLOW_MODEL_NAME:-fraud_xgboost}
+      MLFLOW_CHAMPION_ALIAS: ${MLFLOW_CHAMPION_ALIAS:-champion}
+      MLFLOW_CHALLENGER_ALIAS: ${MLFLOW_CHALLENGER_ALIAS:-challenger}
+      PRODUCER_EXPORT_PATH: ${PRODUCER_EXPORT_PATH:-/data/bootstrap_transactions.csv}
+      MODEL_BLOCK_THRESHOLD: ${MODEL_BLOCK_THRESHOLD:-0.82}
+      MODEL_REVIEW_THRESHOLD: ${MODEL_REVIEW_THRESHOLD:-0.55}
+    ports:
+      - "8003:8003"
+    volumes:
+      - trainer_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health/live', timeout=2)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-platform
+
+  model-bootstrap:
+    build:
+      context: .
+      dockerfile: infra/docker/trainer/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://fraud:fraud@postgres:5432/fraud_platform}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      MLFLOW_MODEL_NAME: ${MLFLOW_MODEL_NAME:-fraud_xgboost}
+      MLFLOW_CHAMPION_ALIAS: ${MLFLOW_CHAMPION_ALIAS:-champion}
+      MLFLOW_CHALLENGER_ALIAS: ${MLFLOW_CHALLENGER_ALIAS:-challenger}
+      PRODUCER_EXPORT_PATH: ${PRODUCER_EXPORT_PATH:-/data/bootstrap_transactions.csv}
+      MODEL_BLOCK_THRESHOLD: ${MODEL_BLOCK_THRESHOLD:-0.82}
+      MODEL_REVIEW_THRESHOLD: ${MODEL_REVIEW_THRESHOLD:-0.55}
+    command: ["fraud-trainer-cli", "bootstrap-model"]
+    volumes:
+      - trainer_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_started
+    restart: "no"
+    networks:
+      - fraud-platform
+
+  analyst-console:
+    build:
+      context: .
+      dockerfile: infra/docker/analyst-console/Dockerfile
+    environment:
+      API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8000}
+      API_PUBLIC_BASE_URL: ${API_PUBLIC_BASE_URL:-http://localhost:8000}
+      PORT: ${ANALYST_CONSOLE_PORT:-3001}
+    ports:
+      - "3001:3001"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1:3001 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-platform
+
+networks:
+  fraud-platform:
+    driver: bridge
+
+volumes:
+  grafana_data:
+  kafka_data:
+  mlflow_data:
+  postgres_data:
+  prometheus_data:
+  producer_data:
+  redis_data:
+  trainer_data:

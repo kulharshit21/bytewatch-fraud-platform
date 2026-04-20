@@ -1,0 +1,7 @@
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: fraud-platform-local-webhook
+    group_by:
+      - alertname

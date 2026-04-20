@@ -1,0 +1,43 @@
+rules:
+  - rule_id: impossible_travel
+    type: impossible_travel
+    severity: critical
+    distance_km: 500.0
+    max_time_since_last_tx_sec: 3600
+    score_delta: 0.32
+    explanation: "Location changed too far too quickly for the same account."
+  - rule_id: very_high_velocity
+    type: threshold
+    severity: high
+    feature: tx_count_5m
+    op: gte
+    threshold: 5
+    score_delta: 0.20
+    explanation: "Transaction velocity exceeded the five minute threshold."
+  - rule_id: repeated_small_amount_card_testing
+    type: card_testing
+    severity: high
+    tx_count_feature: tx_count_5m
+    tx_count_threshold: 4
+    amount_threshold: 15.0
+    score_delta: 0.24
+    explanation: "Multiple small transactions suggest card testing behavior."
+  - rule_id: high_amount_on_new_device
+    type: high_amount_new_device
+    severity: high
+    amount_threshold: 1500.0
+    score_delta: 0.22
+    explanation: "A high-value purchase occurred on a new device."
+  - rule_id: blacklist_hit
+    type: threshold
+    severity: critical
+    feature: high_risk_merchant_flag
+    op: gte
+    threshold: 1
+    score_delta: 0.28
+    explanation: "Merchant or route matches a high risk list."
+  - rule_id: risky_geo_combo
+    type: geo_combo
+    severity: medium
+    score_delta: 0.14
+    explanation: "International and off-hours activity with rapid behavior change."

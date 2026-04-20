@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.next
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+*.egg-info
+apps/analyst-console/node_modules
+mlruns
+tmp

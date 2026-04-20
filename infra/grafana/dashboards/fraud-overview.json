@@ -1,0 +1,78 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(fraud_platform_producer_events_total[5m]))",
+          "legendFormat": "tx/sec",
+          "refId": "A"
+        }
+      ],
+      "title": "Synthetic Transaction Throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(fraud_platform_worker_events_total{stage=\"decisioned\"}[5m])) by (status)",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Decision Rate By Status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(increase(fraud_platform_model_predictions_total{decision=\"BLOCK\"}[1h]))",
+          "legendFormat": "blocked / hr",
+          "refId": "A"
+        }
+      ],
+      "title": "Blocked Transactions Last Hour",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(increase(fraud_platform_model_predictions_total{decision=\"REVIEW\"}[1h]))",
+          "legendFormat": "review / hr",
+          "refId": "A"
+        }
+      ],
+      "title": "Review Queue Additions Last Hour",
+      "type": "stat"
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["fraud", "overview"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "Fraud Overview",
+  "uid": "fraud-overview",
+  "version": 2
+}

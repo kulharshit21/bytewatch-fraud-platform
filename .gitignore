@@ -1,0 +1,17 @@
+.DS_Store
+.coverage
+.env
+.idea/
+.mypy_cache/
+.next/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+*.log
+__pycache__/
+apps/analyst-console/node_modules/
+dist/
+htmlcov/
+mlruns/
+tmp/
