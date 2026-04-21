@@ -112,6 +112,7 @@ More detail:
 - [Troubleshooting](docs/troubleshooting.md)
 - [Demo script](docs/demo-script.md)
 - [Release notes + pinned text](docs/release-notes-v0.1.0.md)
+- [GitHub profile kit](docs/github-profile-kit.md)
 
 ## Tech Stack
 
