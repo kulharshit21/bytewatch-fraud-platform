@@ -60,8 +60,8 @@ export function ConsoleShell({
               Runtime
             </Badge>
             <p className="text-sm leading-6 text-muted">
-              Dashboard values are fetched live from the FastAPI service. Empty states stay honest until the
-              producer and worker generate real cases.
+              Live mode pulls fresh data from FastAPI on a short interval. Empty states stay honest until the
+              producer, worker, and database create real cases to show.
             </p>
           </div>
         </aside>

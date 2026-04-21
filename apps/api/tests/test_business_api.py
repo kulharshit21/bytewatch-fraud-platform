@@ -130,6 +130,42 @@ class FakeRepository:
     def analytics_trends(self, hours=24):
         return [{"bucket": "2026-04-20T00:00:00+00:00", "decision": "BLOCK", "count": 4}]
 
+    def recent_window_metrics(self, window_seconds=60):
+        return {
+            "window_seconds": window_seconds,
+            "processed_transactions": 6,
+            "blocked_transactions": 2,
+            "review_transactions": 1,
+            "open_review_backlog": 3,
+            "last_updated_at": "2026-04-20T00:00:30+00:00",
+        }
+
+    def cases_live_window(self, status=None, decision=None, search=None, window_seconds=30):
+        return {
+            "window_seconds": window_seconds,
+            "matching_cases": 2,
+            "blocked_cases": 1,
+            "review_cases": 1,
+            "last_updated_at": "2026-04-20T00:00:30+00:00",
+        }
+
+    def recent_activity(self, limit=8):
+        return [
+            {
+                "id": f"decision:{self.case_id}",
+                "type": "decision",
+                "timestamp": "2026-04-20T00:00:00+00:00",
+                "case_id": self.case_id,
+                "transaction_id": self.transaction_id,
+                "decision": "BLOCK",
+                "status": "open",
+                "score": 0.92,
+                "scenario": "account_takeover",
+                "rule_id": "velocity",
+                "message": "BLOCK • txn_case_001 • velocity • score 0.92",
+            }
+        ]
+
     def cache_model_metadata(self, metadata):
         return None
 
@@ -216,6 +252,33 @@ class FakeProcessor:
         return None
 
 
+async def fake_service_json_request(*, base_url, method, path, payload=None):
+    if path == "/producer/status":
+        return {
+            "running": True,
+            "generated_events": 99,
+            "rate_per_second": 3.0,
+            "fraud_ratio": 0.18,
+            "current_rate_per_second": 6.0,
+            "current_fraud_ratio": 0.68,
+            "override_expires_at": "2026-04-20T00:00:30+00:00",
+        }
+    if path == "/worker/status":
+        return {"running": True, "healthy": True}
+    if path == "/producer/burst":
+        return {"status": "published", "scenario": payload["scenario"], "count": payload["count"]}
+    if path in {"/producer/start", "/producer/stop", "/producer/reset"}:
+        return {"status": "ok"}
+    if path == "/producer/boost":
+        return {"status": "boosted", "fraud_ratio": payload["fraud_ratio"]}
+    return {"status": "ok"}
+
+
+async def fake_optional_service_json_request(*, base_url, method, path):
+    payload = await fake_service_json_request(base_url=base_url, method=method, path=path)
+    return {"available": True, **payload}
+
+
 def test_cases_and_predict_endpoints(monkeypatch):
     import fraud_platform_api.main as api_main
 
@@ -223,6 +286,12 @@ def test_cases_and_predict_endpoints(monkeypatch):
     monkeypatch.setattr(api_main, "FraudRepository", FakeRepository)
     monkeypatch.setattr(api_main, "FraudStreamProcessor", FakeProcessor)
     monkeypatch.setattr(api_main, "FraudTrainer", FakeTrainer)
+    monkeypatch.setattr(api_main, "_service_json_request", fake_service_json_request)
+    monkeypatch.setattr(
+        api_main,
+        "_optional_service_json_request",
+        fake_optional_service_json_request,
+    )
 
     app = api_main.build_app()
 
@@ -246,6 +315,12 @@ def test_feedback_endpoint_records_feedback(monkeypatch):
     monkeypatch.setattr(api_main, "FraudRepository", FakeRepository)
     monkeypatch.setattr(api_main, "FraudStreamProcessor", FakeProcessor)
     monkeypatch.setattr(api_main, "FraudTrainer", FakeTrainer)
+    monkeypatch.setattr(api_main, "_service_json_request", fake_service_json_request)
+    monkeypatch.setattr(
+        api_main,
+        "_optional_service_json_request",
+        fake_optional_service_json_request,
+    )
 
     app = api_main.build_app()
 
@@ -279,6 +354,12 @@ def test_grafana_alert_webhook_accepts_local_notifications(monkeypatch):
     monkeypatch.setattr(api_main, "FraudRepository", FakeRepository)
     monkeypatch.setattr(api_main, "FraudStreamProcessor", FakeProcessor)
     monkeypatch.setattr(api_main, "FraudTrainer", FakeTrainer)
+    monkeypatch.setattr(api_main, "_service_json_request", fake_service_json_request)
+    monkeypatch.setattr(
+        api_main,
+        "_optional_service_json_request",
+        fake_optional_service_json_request,
+    )
 
     app = api_main.build_app()
 
@@ -299,3 +380,82 @@ def test_grafana_alert_webhook_accepts_local_notifications(monkeypatch):
             "alert_count": 2,
             "statuses": ["firing", "resolved"],
         }
+
+
+def test_live_dashboard_and_cases_endpoints(monkeypatch):
+    import fraud_platform_api.main as api_main
+
+    monkeypatch.setattr(api_main, "KafkaProducer", FakeKafkaProducer)
+    monkeypatch.setattr(api_main, "FraudRepository", FakeRepository)
+    monkeypatch.setattr(api_main, "FraudStreamProcessor", FakeProcessor)
+    monkeypatch.setattr(api_main, "FraudTrainer", FakeTrainer)
+    monkeypatch.setattr(api_main, "_service_json_request", fake_service_json_request)
+    monkeypatch.setattr(
+        api_main,
+        "_optional_service_json_request",
+        fake_optional_service_json_request,
+    )
+
+    app = api_main.build_app()
+
+    with TestClient(app) as client:
+        dashboard_response = client.get("/dashboard/live")
+        cases_response = client.get("/cases/live?status=open&decision=REVIEW")
+
+        assert dashboard_response.status_code == 200
+        assert dashboard_response.json()["recent_window"]["open_review_backlog"] == 3
+        assert dashboard_response.json()["producer"]["available"] is True
+        assert dashboard_response.json()["activities"][0]["decision"] == "BLOCK"
+
+        assert cases_response.status_code == 200
+        assert cases_response.json()["live_window"]["matching_cases"] == 2
+        assert cases_response.json()["activities"][0]["transaction_id"] == "txn_case_001"
+
+
+def test_demo_producer_controls_proxy_real_actions(monkeypatch):
+    import fraud_platform_api.main as api_main
+
+    calls = []
+
+    async def recording_service_request(*, base_url, method, path, payload=None):
+        calls.append((method, path, payload))
+        return await fake_service_json_request(
+            base_url=base_url,
+            method=method,
+            path=path,
+            payload=payload,
+        )
+
+    monkeypatch.setattr(api_main, "KafkaProducer", FakeKafkaProducer)
+    monkeypatch.setattr(api_main, "FraudRepository", FakeRepository)
+    monkeypatch.setattr(api_main, "FraudStreamProcessor", FakeProcessor)
+    monkeypatch.setattr(api_main, "FraudTrainer", FakeTrainer)
+    monkeypatch.setattr(api_main, "_service_json_request", recording_service_request)
+    monkeypatch.setattr(
+        api_main,
+        "_optional_service_json_request",
+        fake_optional_service_json_request,
+    )
+
+    app = api_main.build_app()
+
+    with TestClient(app) as client:
+        burst_response = client.post(
+            "/demo/producer/burst",
+            json={"scenario": "card_testing", "count": 12},
+        )
+        boost_response = client.post(
+            "/demo/producer/boost",
+            json={"fraud_ratio": 0.68, "rate_per_second": 6.0, "duration_seconds": 30},
+        )
+
+        assert burst_response.status_code == 200
+        assert burst_response.json()["count"] == 12
+        assert boost_response.status_code == 200
+        assert boost_response.json()["fraud_ratio"] == 0.68
+        assert ("POST", "/producer/burst", {"scenario": "card_testing", "count": 12}) in calls
+        assert (
+            "POST",
+            "/producer/boost",
+            {"fraud_ratio": 0.68, "rate_per_second": 6.0, "duration_seconds": 30},
+        ) in calls

@@ -21,16 +21,28 @@
 
 </div>
 
+# ByteWatch Fraud Platform
+
 Production-minded fraud platform built as a modular monorepo with Kafka ingestion, a Bytewax stream worker, Redis online features, XGBoost plus rules hybrid scoring, FastAPI business APIs, PostgreSQL persistence, MLflow model registry, Evidently drift reporting, Grafana dashboards, and a real Next.js analyst console.
+
+## Problem Statement
+
+Fraud teams need more than an offline classifier. They need a system that can ingest live payment events, maintain rolling behavioral context, combine deterministic controls with ML scoring, surface cases to analysts quickly, and close the loop with feedback, monitoring, and retraining.
+
+## Why This Project Matters
+
+- Most fraud portfolios stop at notebooks and batch metrics.
+- Real-world fraud systems are judged on latency, explainability, observability, and analyst workflow.
+- This repo focuses on the full product story: streaming ingestion, online features, hybrid decisioning, case review, drift monitoring, and demo-friendly operations tooling.
 
 ## Quick Jump
 
 <p>
   <a href="#what-is-real-now"><img src="https://img.shields.io/badge/What%20Is%20Real-Open-0f766e?style=for-the-badge&labelColor=111827" alt="What is real" /></a>
-  <a href="#architecture"><img src="https://img.shields.io/badge/Architecture-Open-155e75?style=for-the-badge&labelColor=111827" alt="Architecture" /></a>
+  <a href="#architecture-summary"><img src="https://img.shields.io/badge/Architecture-Open-155e75?style=for-the-badge&labelColor=111827" alt="Architecture" /></a>
   <a href="#quickstart"><img src="https://img.shields.io/badge/Quickstart-Open-1d4ed8?style=for-the-badge&labelColor=111827" alt="Quickstart" /></a>
-  <a href="#live-demo-experience"><img src="https://img.shields.io/badge/Live%20Demo-Open-7c3aed?style=for-the-badge&labelColor=111827" alt="Live demo" /></a>
-  <a href="#known-limitations"><img src="https://img.shields.io/badge/Known%20Limitations-Open-f97316?style=for-the-badge&labelColor=111827" alt="Known limitations" /></a>
+  <a href="#live-demo-capabilities"><img src="https://img.shields.io/badge/Live%20Demo-Open-7c3aed?style=for-the-badge&labelColor=111827" alt="Live demo" /></a>
+  <a href="#screenshots"><img src="https://img.shields.io/badge/Screenshots-Open-f97316?style=for-the-badge&labelColor=111827" alt="Screenshots" /></a>
 </p>
 
 ## What Is Real Now
@@ -58,30 +70,18 @@ Production-minded fraud platform built as a modular monorepo with Kafka ingestio
   </tr>
 </table>
 
-## Why The Repo Feels Live
+## Key Features
 
-<table>
-  <tr>
-    <td width="25%" valign="top">
-      <strong>Live browser mode</strong><br />
-      <sub><code>/overview</code> and <code>/cases</code> poll real FastAPI live endpoints, show last-updated labels, and surface real backend deltas.</sub>
-    </td>
-    <td width="25%" valign="top">
-      <strong>Real analyst queue</strong><br />
-      <sub>The backlog defaults to open <code>REVIEW</code> cases so the product flow matches the actual analyst workflow.</sub>
-    </td>
-    <td width="25%" valign="top">
-      <strong>Real demo controls</strong><br />
-      <sub>Burst, boost, pause, resume, and reset actions hit the producer service and move data through the real pipeline.</sub>
-    </td>
-    <td width="25%" valign="top">
-      <strong>Real ops surface</strong><br />
-      <sub>Grafana, Prometheus, MLflow, and Evidently are wired into the same monorepo instead of being slideware.</sub>
-    </td>
-  </tr>
-</table>
+- Real-time producer to Kafka to Bytewax to Redis to scoring to Postgres pipeline
+- Redis-backed rolling features for velocity, spend, novelty, and geo jumps
+- Hybrid decisioning with rules plus champion XGBoost model
+- Persisted rule hits, reason codes, scores, and case metadata
+- API-driven analyst console with live polling-based updates
+- Analyst feedback loop written to both PostgreSQL and `tx.feedback`
+- MLflow model registry plus Evidently drift reporting
+- Grafana and Prometheus dashboards for throughput, latency, DLQ, and drift
 
-## Architecture
+## Architecture Summary
 
 ```mermaid
 flowchart LR
@@ -112,7 +112,21 @@ More detail:
 - [Troubleshooting](docs/troubleshooting.md)
 - [Demo script](docs/demo-script.md)
 
-## Repository Layout
+## Tech Stack
+
+| Layer | Tools |
+|---|---|
+| Streaming | Kafka, Bytewax |
+| Online state | Redis |
+| ML and rules | XGBoost, scikit-learn, YAML rule engine |
+| APIs | FastAPI, Pydantic v2 |
+| Persistence | PostgreSQL, SQLAlchemy, Alembic |
+| Analyst UI | Next.js 15, TypeScript, Tailwind, shadcn-style components |
+| Observability | Prometheus, Grafana |
+| Model Ops | MLflow, Evidently |
+| Packaging | Docker Compose, Makefile, GitHub Actions |
+
+## Repository Structure
 
 ```text
 apps/
@@ -139,20 +153,6 @@ infra/
 docs/
 tests/
 ```
-
-## Core Runtime Flow
-
-1. The producer emits realistic transaction events to `tx.raw`.
-2. Bytewax consumes `tx.raw`.
-3. The worker validates payloads and normalizes fields.
-4. Redis provides hot account, device, and merchant context for rolling features.
-5. The rule engine plus champion XGBoost model produce a final score and decision.
-6. The worker persists raw, scored, and decision records to PostgreSQL.
-7. FastAPI exposes cases, transactions, model metadata, analytics, and feedback endpoints.
-8. The analyst console renders overview, queue, case detail, models, and monitoring pages from the real API.
-9. In live mode, the console refreshes overview and backlog data every few seconds from dedicated live endpoints.
-10. Analyst feedback is written to PostgreSQL, published to `tx.feedback`, and stored for retraining.
-11. The trainer can retrain and refresh MLflow plus Evidently artifacts from generated CSV data or persisted database rows, with analyst feedback taking precedence over synthetic labels.
 
 ## Quickstart
 
@@ -200,7 +200,7 @@ docker compose down --volumes --remove-orphans
 docker compose up -d --build
 ```
 
-### Local URLs
+### Key URLs
 
 | Surface | URL |
 |---|---|
@@ -215,30 +215,66 @@ docker compose up -d --build
 | Prometheus | `http://localhost:9090` |
 | MLflow | `http://localhost:5000` |
 
-## Live Demo Experience
+## Live Demo Capabilities
 
 ### What updates automatically
 
 - `Overview` and `Cases` enable live mode by default.
-- Live mode uses real short polling against FastAPI endpoints:
+- Live mode is implemented with real polling-based browser updates, not fake frontend animation.
+- Polling hits FastAPI live endpoints:
   - `/dashboard/live`
   - `/cases/live`
 - Turning live mode off freezes the current browser snapshot until you click refresh.
 - The backlog page defaults to the real analyst queue: `decision=REVIEW` and `status=open`.
-- Demo controls on Overview call API-backed producer endpoints:
-  - `POST /demo/producer/start`
-  - `POST /demo/producer/stop`
-  - `POST /demo/producer/burst`
-  - `POST /demo/producer/boost`
-  - `POST /demo/producer/reset`
 
-### Fastest 60-second showcase
+### What the analyst console is for
+
+- The analyst console is the fraud operations surface.
+- It is where you review cases, inspect scores and reasons, trigger demo bursts, and submit feedback.
+
+### What Grafana is for
+
+- Grafana is the operator and observability surface.
+- It is where you show throughput, latency, errors, drift, and alerting.
+- The analyst console is intentionally not pretending to be Grafana.
+
+### Demo controls
+
+The overview page includes real producer controls that call API-backed endpoints:
+
+- `POST /demo/producer/start`
+- `POST /demo/producer/stop`
+- `POST /demo/producer/burst`
+- `POST /demo/producer/boost`
+- `POST /demo/producer/reset`
+
+These controls change real backend behavior and push new events through Kafka, Bytewax, Redis, scoring, Postgres, and the UI.
+
+## Demo Walkthrough
 
 1. Open `http://localhost:3001/overview`.
-2. Leave live mode on and watch the last-updated badge tick.
-3. Fire a fraud burst from the demo controls panel.
-4. Open `http://localhost:3001/cases` and show new `REVIEW` and `BLOCK` rows rising in the real analyst backlog.
-5. Pivot into a case detail page, then out to Grafana for the operator story.
+2. Point out the live badge, last-updated label, recent-window counters, and activity feed.
+3. Trigger `Inject impossible travel burst` or `Inject new-device high-amount burst`.
+4. Open `http://localhost:3001/cases` and show new rows rising into the real analyst backlog.
+5. Open a case detail page and submit feedback.
+6. Open Grafana to show the operational view of the same system.
+7. Open MLflow to show the registered champion model.
+
+## Model, Training, and Registry
+
+- The trainer can bootstrap a champion XGBoost model from generated CSV data.
+- It can also rebuild training data from persisted PostgreSQL transactions.
+- When analyst feedback exists, retraining uses the latest analyst label instead of the synthetic source label.
+- MLflow stores registered model versions and aliases like `champion`.
+- Evidently generates drift artifacts and updates drift metrics surfaced in Grafana.
+
+## Observability
+
+- Prometheus metrics are exposed by every Python service on `/metrics`.
+- Grafana dashboards are provisioned from `infra/grafana/dashboards`.
+- Alert rules are provisioned from `infra/grafana/provisioning/alerting`.
+- Local alert notifications terminate at the API webhook sink at `POST /ops/grafana-alerts`.
+- Drift gauges are updated after the trainer generates a new Evidently report.
 
 ## Useful Commands
 
@@ -259,6 +295,21 @@ curl -X POST http://localhost:8000/demo/producer/burst -H "content-type: applica
 make test-docker
 make frontend-test
 ```
+
+## Screenshots
+
+Add screenshots before the final public showcase so the repo tells its story visually without relying only on text.
+
+Recommended order:
+
+1. `docs/screenshots/01-overview-live.png` — overview page in live mode with activity feed and demo controls
+2. `docs/screenshots/02-cases-backlog.png` — open review backlog with fresh rows arriving
+3. `docs/screenshots/03-case-detail.png` — case detail showing score, rule hits, reasons, and feedback panel
+4. `docs/screenshots/04-monitoring.png` — monitoring page that separates readiness, business counts, and Grafana
+5. `docs/screenshots/05-grafana-fraud-overview.png` — Grafana operator dashboard
+6. `docs/screenshots/06-mlflow-champion.png` — MLflow champion model view
+
+See [docs/screenshots-checklist.md](docs/screenshots-checklist.md) for a capture checklist and suggested captions.
 
 ## Local Development
 
@@ -286,54 +337,27 @@ npm run build
 npm test
 ```
 
-## Testing Status
+## Honest Limitations
 
-Automated coverage includes:
-
-- contract schema tests
-- synthetic producer tests
-- in-memory feature store tests
-- rule engine tests
-- model runtime tests
-- stream processor behavior tests
-- trainer feature-frame and threshold tests
-- API business endpoint tests
-- repository feedback-to-training frame tests
-- analyst console render, API helper, and server-action tests
-
-Recommended verification commands:
-
-```bash
-make test-docker
-make frontend-test
-```
-
-## Observability
-
-- Prometheus metrics are exposed by every Python service on `/metrics`.
-- Grafana dashboards are provisioned from `infra/grafana/dashboards`.
-- Alert rules are provisioned from `infra/grafana/provisioning/alerting`.
-- Local development routes firing alerts to the API webhook sink at `/ops/grafana-alerts` instead of external email or chat systems.
-- Drift gauges are updated from trainer-side Evidently report generation.
-
-## Known Limitations
-
-- The worker runtime runs Bytewax inside the service process for local simplicity; distributed deployment tuning is still out of scope for this repo.
-- The current MLflow service uses a local SQLite-backed metadata store suitable for local demos, not HA production.
+- The worker runtime runs Bytewax inside the service process for local simplicity; distributed deployment tuning is still out of scope.
+- The current MLflow service uses a local SQLite-backed metadata store suitable for demos, not HA production.
 - Feedback-driven retraining is implemented as a controlled and manual workflow, not automatic promotion.
 - Local Grafana notifications terminate at the API webhook sink rather than a real on-call channel.
 - Kafka lag monitoring is not fully instrumented yet.
-- The `Models` page remains snapshot-style; the live polling emphasis is on `Overview` and `Cases`, where demo value is highest.
-- The local host shell still defaults to Python 3.10, so backend commands should be run through Docker or Python 3.11 even though the platform itself has been runtime-verified in Docker.
+- The `Models` page remains snapshot-style; the live polling emphasis is on `Overview` and `Cases`.
+- The local host shell often defaults to Python 3.10, so backend commands should be run through Docker or Python 3.11.
 
-## Why This Project Is Defensible
+## Future Improvements
 
-- real streaming path instead of notebook-only fraud scoring
-- Redis online features rather than fake precomputed aggregates
-- hybrid rules plus model decisioning with persisted explanation artifacts
-- analyst feedback loop with DB persistence and Kafka event emission
-- model registry and drift reporting included in the same repo
-- dashboards, alerts, migrations, health checks, and service boundaries are version-controlled
+- Upgrade live polling to SSE or websockets when the product surface needs finer-grained updates
+- Add richer backlog triage workflows and analyst assignment states
+- Expand Kafka lag and consumer-group observability
+- Add a replay mode for controlled historical stream demonstrations
+- Add real screenshot assets and an optional short demo GIF
+
+## License
+
+This repository is released under the [MIT License](LICENSE).
 
 <div align="center">
 

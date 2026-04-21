@@ -101,17 +101,9 @@ class SyntheticTransactionGenerator:
     def __init__(self, seed: int = 42, fraud_ratio: float = 0.18, account_count: int = 250) -> None:
         self.random = random.Random(seed)
         self.population = SyntheticPopulation(seed=seed, account_count=account_count)
-        self.fraud_ratio = fraud_ratio
+        self.fraud_ratio = max(0.01, min(fraud_ratio, 0.95))
         self.sequence = 0
-        self._scenario_weights = {
-            SimulationScenario.NORMAL_BEHAVIOR: max(0.01, 1.0 - fraud_ratio),
-            SimulationScenario.VELOCITY_BURST: fraud_ratio * 0.18,
-            SimulationScenario.IMPOSSIBLE_TRAVEL: fraud_ratio * 0.16,
-            SimulationScenario.CARD_TESTING: fraud_ratio * 0.18,
-            SimulationScenario.ACCOUNT_TAKEOVER: fraud_ratio * 0.16,
-            SimulationScenario.NEW_DEVICE_HIGH_AMOUNT: fraud_ratio * 0.16,
-            SimulationScenario.RISKY_MERCHANT: fraud_ratio * 0.16,
-        }
+        self._scenario_weights = self._build_scenario_weights(self.fraud_ratio)
 
     def generate(
         self, *, now: datetime | None = None, scenario: SimulationScenario | None = None
@@ -160,10 +152,26 @@ class SyntheticTransactionGenerator:
         for offset in range(count):
             yield self.generate(now=base + timedelta(seconds=offset * 5))
 
+    def set_fraud_ratio(self, fraud_ratio: float) -> None:
+        self.fraud_ratio = max(0.01, min(fraud_ratio, 0.95))
+        self._scenario_weights = self._build_scenario_weights(self.fraud_ratio)
+
     def _pick_scenario(self) -> SimulationScenario:
         scenarios = list(self._scenario_weights.keys())
         weights = list(self._scenario_weights.values())
         return self.random.choices(scenarios, weights=weights, k=1)[0]
+
+    @staticmethod
+    def _build_scenario_weights(fraud_ratio: float) -> dict[SimulationScenario, float]:
+        return {
+            SimulationScenario.NORMAL_BEHAVIOR: max(0.01, 1.0 - fraud_ratio),
+            SimulationScenario.VELOCITY_BURST: fraud_ratio * 0.18,
+            SimulationScenario.IMPOSSIBLE_TRAVEL: fraud_ratio * 0.16,
+            SimulationScenario.CARD_TESTING: fraud_ratio * 0.18,
+            SimulationScenario.ACCOUNT_TAKEOVER: fraud_ratio * 0.16,
+            SimulationScenario.NEW_DEVICE_HIGH_AMOUNT: fraud_ratio * 0.16,
+            SimulationScenario.RISKY_MERCHANT: fraud_ratio * 0.16,
+        }
 
     def _next_event_time(self, account: AccountProfile) -> datetime:
         return account.last_event_time + timedelta(seconds=self.random.randint(5, 45))

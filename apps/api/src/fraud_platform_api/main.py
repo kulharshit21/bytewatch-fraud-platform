@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import uuid
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +19,12 @@ from fraud_platform_stream_worker.processor import FraudStreamProcessor
 from fraud_platform_trainer.training import FraudTrainer
 from kafka import KafkaProducer
 
-from fraud_platform_api.schemas import FeedbackRequest, PredictRequest
+from fraud_platform_api.schemas import (
+    FeedbackRequest,
+    PredictRequest,
+    ProducerBoostRequest,
+    ProducerBurstRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +36,49 @@ class ApiSettings(RuntimeSettings):
     def __init__(self, **values: object) -> None:
         super().__init__(**values)
         self.port = self.api_port
+
+
+async def _service_json_request(
+    *,
+    base_url: str,
+    method: str,
+    path: str,
+    payload: dict[str, object] | None = None,
+) -> dict[str, object]:
+    url = f"{base_url.rstrip('/')}{path}"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.request(method=method, url=url, json=payload)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as exc:
+        detail = _http_error_detail(exc.response)
+        raise HTTPException(status_code=exc.response.status_code, detail=detail) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail=f"Unable to reach {url}: {exc}") from exc
+
+
+async def _optional_service_json_request(
+    *,
+    base_url: str,
+    method: str,
+    path: str,
+) -> dict[str, object]:
+    try:
+        payload = await _service_json_request(base_url=base_url, method=method, path=path)
+        return {"available": True, **payload}
+    except HTTPException as exc:
+        return {"available": False, "error": exc.detail}
+
+
+def _http_error_detail(response: httpx.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return f"Request failed with {response.status_code}"
+    if isinstance(payload, dict) and payload.get("detail"):
+        return str(payload["detail"])
+    return f"Request failed with {response.status_code}"
 
 
 def _startup(app: FastAPI) -> None:
@@ -124,6 +173,37 @@ def api_routes(app: FastAPI) -> None:
             sort_order=sort_order,
         )
 
+    @app.get("/cases/live", tags=["cases"])
+    async def live_cases(
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=20, ge=1, le=100),
+        status: str | None = None,
+        decision: str | None = None,
+        search: str | None = None,
+        sort_by: str = Query(default="decision_time"),
+        sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
+        recent_seconds: int = Query(default=30, ge=10, le=300),
+        activity_limit: int = Query(default=6, ge=1, le=12),
+    ) -> dict[str, object]:
+        repository: FraudRepository = app.state.repository
+        payload = repository.list_cases(
+            page=page,
+            page_size=page_size,
+            status=status,
+            decision=decision,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        payload["live_window"] = repository.cases_live_window(
+            status=status,
+            decision=decision,
+            search=search,
+            window_seconds=recent_seconds,
+        )
+        payload["activities"] = repository.recent_activity(limit=activity_limit)
+        return payload
+
     @app.get("/cases/{case_id}", tags=["cases"])
     async def get_case(case_id: str) -> dict[str, object]:
         repository: FraudRepository = app.state.repository
@@ -202,6 +282,92 @@ def api_routes(app: FastAPI) -> None:
             else trainer.get_current_metadata().model_dump(mode="json"),
             "grafana_url": app.state.settings.grafana_url,
         }
+
+    @app.get("/dashboard/live", tags=["analytics"])
+    async def dashboard_live(
+        hours: int = Query(default=24, ge=1, le=168),
+        recent_seconds: int = Query(default=60, ge=10, le=600),
+        activity_limit: int = Query(default=8, ge=1, le=12),
+    ) -> dict[str, object]:
+        repository: FraudRepository = app.state.repository
+        trainer: FraudTrainer = app.state.trainer
+        settings: ApiSettings = app.state.settings
+        return {
+            "summary": repository.dashboard_overview(hours=hours),
+            "recent_window": repository.recent_window_metrics(window_seconds=recent_seconds),
+            "trends": repository.analytics_trends(hours=hours),
+            "activities": repository.recent_activity(limit=activity_limit),
+            "model": None
+            if trainer.get_current_metadata() is None
+            else trainer.get_current_metadata().model_dump(mode="json"),
+            "grafana_url": settings.grafana_url,
+            "producer": await _optional_service_json_request(
+                base_url=settings.producer_internal_base_url,
+                method="GET",
+                path="/producer/status",
+            ),
+            "worker": await _optional_service_json_request(
+                base_url=settings.stream_worker_internal_base_url,
+                method="GET",
+                path="/worker/status",
+            ),
+        }
+
+    @app.get("/demo/producer/status", tags=["demo"])
+    async def demo_producer_status() -> dict[str, object]:
+        settings: ApiSettings = app.state.settings
+        return await _service_json_request(
+            base_url=settings.producer_internal_base_url,
+            method="GET",
+            path="/producer/status",
+        )
+
+    @app.post("/demo/producer/start", tags=["demo"])
+    async def demo_producer_start() -> dict[str, object]:
+        settings: ApiSettings = app.state.settings
+        return await _service_json_request(
+            base_url=settings.producer_internal_base_url,
+            method="POST",
+            path="/producer/start",
+        )
+
+    @app.post("/demo/producer/stop", tags=["demo"])
+    async def demo_producer_stop() -> dict[str, object]:
+        settings: ApiSettings = app.state.settings
+        return await _service_json_request(
+            base_url=settings.producer_internal_base_url,
+            method="POST",
+            path="/producer/stop",
+        )
+
+    @app.post("/demo/producer/burst", tags=["demo"])
+    async def demo_producer_burst(payload: ProducerBurstRequest) -> dict[str, object]:
+        settings: ApiSettings = app.state.settings
+        return await _service_json_request(
+            base_url=settings.producer_internal_base_url,
+            method="POST",
+            path="/producer/burst",
+            payload=payload.model_dump(mode="json"),
+        )
+
+    @app.post("/demo/producer/boost", tags=["demo"])
+    async def demo_producer_boost(payload: ProducerBoostRequest) -> dict[str, object]:
+        settings: ApiSettings = app.state.settings
+        return await _service_json_request(
+            base_url=settings.producer_internal_base_url,
+            method="POST",
+            path="/producer/boost",
+            payload=payload.model_dump(mode="json"),
+        )
+
+    @app.post("/demo/producer/reset", tags=["demo"])
+    async def demo_producer_reset() -> dict[str, object]:
+        settings: ApiSettings = app.state.settings
+        return await _service_json_request(
+            base_url=settings.producer_internal_base_url,
+            method="POST",
+            path="/producer/reset",
+        )
 
     @app.post("/ops/grafana-alerts", tags=["ops"])
     async def receive_grafana_alert(payload: dict[str, object]) -> dict[str, object]:

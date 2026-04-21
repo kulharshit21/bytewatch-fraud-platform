@@ -390,6 +390,39 @@ class FraudRepository:
                 "last_updated_at": datetime.now(UTC).isoformat(),
             }
 
+    def recent_window_metrics(self, window_seconds: int = 60) -> dict[str, Any]:
+        with self._session() as session:
+            since = datetime.now(UTC) - timedelta(seconds=window_seconds)
+            processed = session.execute(
+                select(func.count()).where(ScoredTransaction.event_time >= since)
+            ).scalar_one()
+            blocked = session.execute(
+                select(func.count()).where(
+                    ScoredTransaction.event_time >= since,
+                    ScoredTransaction.decision == "BLOCK",
+                )
+            ).scalar_one()
+            review = session.execute(
+                select(func.count()).where(
+                    ScoredTransaction.event_time >= since,
+                    ScoredTransaction.decision == "REVIEW",
+                )
+            ).scalar_one()
+            open_backlog = session.execute(
+                select(func.count()).where(
+                    FraudDecision.decision == "REVIEW",
+                    FraudDecision.case_status == "open",
+                )
+            ).scalar_one()
+            return {
+                "window_seconds": window_seconds,
+                "processed_transactions": int(processed),
+                "blocked_transactions": int(blocked),
+                "review_transactions": int(review),
+                "open_review_backlog": int(open_backlog),
+                "last_updated_at": datetime.now(UTC).isoformat(),
+            }
+
     def analytics_trends(self, hours: int = 24) -> list[dict[str, Any]]:
         with self._session() as session:
             since = datetime.now(UTC) - timedelta(hours=hours)
@@ -411,6 +444,121 @@ class FraudRepository:
                 }
                 for row in rows
             ]
+
+    def cases_live_window(
+        self,
+        *,
+        status: str | None = None,
+        decision: str | None = None,
+        search: str | None = None,
+        window_seconds: int = 30,
+    ) -> dict[str, Any]:
+        with self._session() as session:
+            since = datetime.now(UTC) - timedelta(seconds=window_seconds)
+            matching_query = select(FraudDecision).where(FraudDecision.decision_time >= since)
+            if status:
+                matching_query = matching_query.where(FraudDecision.case_status == status)
+            if decision:
+                matching_query = matching_query.where(FraudDecision.decision == decision)
+            if search:
+                matching_query = matching_query.where(FraudDecision.transaction_id.contains(search))
+
+            matching = session.execute(
+                select(func.count()).select_from(matching_query.subquery())
+            ).scalar_one()
+            blocked = session.execute(
+                select(func.count()).where(
+                    FraudDecision.decision_time >= since,
+                    FraudDecision.decision == "BLOCK",
+                )
+            ).scalar_one()
+            review = session.execute(
+                select(func.count()).where(
+                    FraudDecision.decision_time >= since,
+                    FraudDecision.decision == "REVIEW",
+                )
+            ).scalar_one()
+            return {
+                "window_seconds": window_seconds,
+                "matching_cases": int(matching),
+                "blocked_cases": int(blocked),
+                "review_cases": int(review),
+                "last_updated_at": datetime.now(UTC).isoformat(),
+            }
+
+    def recent_activity(self, limit: int = 8) -> list[dict[str, Any]]:
+        with self._session() as session:
+            decision_rows = (
+                session.execute(
+                    select(FraudDecision).order_by(desc(FraudDecision.decision_time)).limit(limit)
+                )
+                .scalars()
+                .all()
+            )
+            feedback_rows = (
+                session.execute(
+                    select(AnalystFeedback).order_by(desc(AnalystFeedback.created_at)).limit(limit)
+                )
+                .scalars()
+                .all()
+            )
+
+            items: list[dict[str, Any]] = []
+            for row in decision_rows:
+                scored = (
+                    session.execute(
+                        select(ScoredTransaction)
+                        .where(ScoredTransaction.transaction_id == row.transaction_id)
+                        .order_by(desc(ScoredTransaction.event_time))
+                    )
+                    .scalars()
+                    .first()
+                )
+                first_rule = next(
+                    (
+                        str(item.get("rule_id"))
+                        for item in (row.rule_hits or [])
+                        if isinstance(item, dict) and item.get("rule_id")
+                    ),
+                    None,
+                )
+                score = None if scored is None else float(scored.score)
+                items.append(
+                    {
+                        "id": f"decision:{row.id}",
+                        "type": "decision",
+                        "timestamp": row.decision_time.isoformat(),
+                        "case_id": str(row.id),
+                        "transaction_id": row.transaction_id,
+                        "decision": row.decision,
+                        "status": row.case_status,
+                        "score": score,
+                        "scenario": None if scored is None else scored.scenario,
+                        "rule_id": first_rule,
+                        "message": self._decision_activity_message(
+                            decision=row.decision,
+                            transaction_id=row.transaction_id,
+                            score=score,
+                            rule_id=first_rule,
+                        ),
+                    }
+                )
+
+            for row in feedback_rows:
+                items.append(
+                    {
+                        "id": f"feedback:{row.id}",
+                        "type": "feedback",
+                        "timestamp": row.created_at.isoformat(),
+                        "case_id": row.case_id,
+                        "transaction_id": row.transaction_id,
+                        "feedback_label": row.feedback_label,
+                        "analyst_id": row.analyst_id,
+                        "message": f"{row.analyst_id} marked {row.feedback_label}",
+                    }
+                )
+
+            return sorted(items, key=lambda item: item["timestamp"], reverse=True)[:limit]
 
     def training_frame(self) -> list[dict[str, Any]]:
         with self._session() as session:
@@ -462,3 +610,16 @@ class FraudRepository:
         if feedback_label in {"false_positive", "legitimate"}:
             return 0
         return None
+
+    @staticmethod
+    def _decision_activity_message(
+        *,
+        decision: str,
+        transaction_id: str,
+        score: float | None,
+        rule_id: str | None,
+    ) -> str:
+        score_label = "n/a" if score is None else f"{score:.2f}"
+        if rule_id:
+            return f"{decision} • {transaction_id} • {rule_id} • score {score_label}"
+        return f"{decision} • {transaction_id} • score {score_label}"

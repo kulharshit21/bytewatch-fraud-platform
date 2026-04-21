@@ -40,6 +40,24 @@ curl http://localhost:8001/producer/status
 curl http://localhost:8002/worker/status
 ```
 
+## Live mode looks frozen
+
+- Confirm the live mode toggle on `Overview` or `Cases` is enabled.
+- Confirm the live endpoints are responding:
+
+```bash
+curl http://localhost:8000/dashboard/live
+curl "http://localhost:8000/cases/live?status=open&decision=REVIEW"
+```
+
+- If the producer was paused during a demo, resume it from the Overview demo controls or with:
+
+```bash
+curl -X POST http://localhost:8000/demo/producer/start
+```
+
+- Remember that `Models` and individual case detail pages are still snapshot-oriented; the live polling emphasis is on `Overview` and `Cases`.
+
 ## Stream worker is unhealthy
 
 - Check Redis, Kafka, PostgreSQL, and MLflow health in `docker compose ps`.
@@ -102,3 +120,15 @@ docker compose exec postgres psql -U fraud -d fraud_platform -c "select transact
 ```bash
 docker compose exec trainer python -c "from fraud_platform_common.config import RuntimeSettings; from fraud_platform_persistence import FraudRepository; repo = FraudRepository(RuntimeSettings(service_name='trainer')); rows = [row for row in repo.training_frame() if row['feedback_count'] > 0]; print(rows[-1]['transaction_id'], rows[-1]['label_source'], rows[-1]['latest_feedback_label'], rows[-1]['label'])"
 ```
+
+## Demo controls do not create obvious changes
+
+- Use one of the burst endpoints instead of waiting for the normal fraud ratio:
+
+```bash
+curl -X POST http://localhost:8000/demo/producer/burst -H "content-type: application/json" -d "{\"scenario\":\"impossible_travel\",\"count\":10}"
+curl -X POST http://localhost:8000/demo/producer/burst -H "content-type: application/json" -d "{\"scenario\":\"new_device_high_amount\",\"count\":12}"
+```
+
+- The `Overview` page shows burst impact fastest through the activity feed and recent window counters.
+- The `Cases` page is best for showing new backlog rows arriving automatically.

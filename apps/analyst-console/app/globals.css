@@ -29,3 +29,33 @@ a {
 button {
   font: inherit;
 }
+
+@keyframes live-row-flash {
+  0% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 1px rgba(79, 195, 161, 0.38);
+  }
+  30% {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px rgba(79, 195, 161, 0.18), 0 18px 36px rgba(79, 195, 161, 0.16);
+  }
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 1px rgba(79, 195, 161, 0.08);
+  }
+}
+
+.live-row-fresh {
+  animation: live-row-flash 4.6s ease-out 1;
+}
+
+@keyframes toast-slide-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}

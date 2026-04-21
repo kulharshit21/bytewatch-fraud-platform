@@ -70,6 +70,14 @@ class RuntimeSettings(BaseSettings):
 
     api_public_base_url: str = Field(default="http://localhost:8000", alias="API_PUBLIC_BASE_URL")
     api_internal_base_url: str = Field(default="http://api:8000", alias="API_INTERNAL_BASE_URL")
+    producer_internal_base_url: str = Field(
+        default="http://localhost:8001",
+        alias="PRODUCER_INTERNAL_BASE_URL",
+    )
+    stream_worker_internal_base_url: str = Field(
+        default="http://localhost:8002",
+        alias="STREAM_WORKER_INTERNAL_BASE_URL",
+    )
     prometheus_url: str = Field(default="http://localhost:9090", alias="PROMETHEUS_URL")
     grafana_url: str = Field(default="http://localhost:3000", alias="GRAFANA_URL")
 
