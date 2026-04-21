@@ -111,6 +111,7 @@ More detail:
 - [Runbook](docs/runbook.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Demo script](docs/demo-script.md)
+- [Release notes + pinned text](docs/release-notes-v0.1.0.md)
 
 ## Tech Stack
 
@@ -298,18 +299,49 @@ make frontend-test
 
 ## Screenshots
 
-Add screenshots before the final public showcase so the repo tells its story visually without relying only on text.
+These screenshots were captured from the running local stack and wired directly into the repo so visitors can see the product story before they clone it.
 
-Recommended order:
+### Overview live mode
 
-1. `docs/screenshots/01-overview-live.png` — overview page in live mode with activity feed and demo controls
-2. `docs/screenshots/02-cases-backlog.png` — open review backlog with fresh rows arriving
-3. `docs/screenshots/03-case-detail.png` — case detail showing score, rule hits, reasons, and feedback panel
-4. `docs/screenshots/04-monitoring.png` — monitoring page that separates readiness, business counts, and Grafana
-5. `docs/screenshots/05-grafana-fraud-overview.png` — Grafana operator dashboard
-6. `docs/screenshots/06-mlflow-champion.png` — MLflow champion model view
+<p align="center">
+  <img src="docs/screenshots/01-overview-live.png" alt="Live overview with activity feed and demo controls" width="100%" />
+</p>
 
-See [docs/screenshots-checklist.md](docs/screenshots-checklist.md) for a capture checklist and suggested captions.
+Live overview with recent-window counters, API-backed live polling, producer controls, and the latest persisted decisions.
+
+### Analyst backlog and investigation flow
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/02-cases-backlog.png" alt="Analyst backlog updating from the real API" width="100%" />
+      <p><strong>Cases backlog.</strong> Open review queue sourced from persisted fraud decisions, with fresh rows highlighted during live mode.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/03-case-detail.png" alt="Case detail with score, rule hits, and analyst actions" width="100%" />
+      <p><strong>Case detail.</strong> Transaction context, feature snapshot, rule hits, reason codes, and real analyst feedback actions.</p>
+    </td>
+  </tr>
+</table>
+
+### Monitoring and model operations
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/04-monitoring.png" alt="Monitoring page with readiness, business counts, and observability links" width="100%" />
+      <p><strong>Monitoring page.</strong> Separates readiness, DB-backed business counts, and Grafana/Prometheus operator links.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/06-mlflow-champion.png" alt="MLflow registered model view with champion alias" width="100%" />
+      <p><strong>MLflow registry.</strong> Registered <code>fraud_xgboost</code> model with the <code>champion</code> alias visible in the local MLflow UI.</p>
+    </td>
+  </tr>
+</table>
+
+Grafana remains linked from the monitoring page and README URLs because the local demo stack keeps the operator dashboard behind its own login surface.
+
+See [docs/screenshots-checklist.md](docs/screenshots-checklist.md) for the ordered capture plan and suggested captions.
 
 ## Local Development
 

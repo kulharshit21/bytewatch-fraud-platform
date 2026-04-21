@@ -2,7 +2,7 @@
 
 Use this as the capture order for the public GitHub landing page.
 
-## Recommended order
+## Captured screenshots in repo
 
 1. `docs/screenshots/01-overview-live.png`
    Caption: `Live overview with real activity feed, recent-window counters, and producer demo controls.`
@@ -12,10 +12,14 @@ Use this as the capture order for the public GitHub landing page.
    Caption: `Case detail with model score, rule hits, reason codes, and analyst feedback actions.`
 4. `docs/screenshots/04-monitoring.png`
    Caption: `Monitoring page that separates API readiness, DB-backed business counts, and observability links.`
-5. `docs/screenshots/05-grafana-fraud-overview.png`
-   Caption: `Grafana operator dashboard for throughput, latency, DLQ, and alert context.`
-6. `docs/screenshots/06-mlflow-champion.png`
-   Caption: `MLflow registry showing the champion model version and metadata.`
+5. `docs/screenshots/06-mlflow-champion.png`
+   Caption: `MLflow registry showing the registered model and champion alias in the local UI.`
+
+## Optional follow-up captures
+
+- `docs/screenshots/05-grafana-fraud-overview.png`
+  Caption: `Grafana operator dashboard for throughput, latency, DLQ, and alert context.`
+  Note: the local demo stack keeps Grafana behind its own login screen, so capture this after logging in with the local demo credentials.
 
 ## Capture notes
 
@@ -23,6 +27,7 @@ Use this as the capture order for the public GitHub landing page.
 - Keep browser chrome minimal and readable.
 - Capture real data, not empty states, unless you are documenting an empty-state flow specifically.
 - For the hero screenshot, use `Overview` during live mode with a visible activity feed and recent-window movement.
+- If you later capture Grafana, log in with the local demo credentials from `.env.example` before taking the dashboard image.
 
 ## Bonus assets
 
